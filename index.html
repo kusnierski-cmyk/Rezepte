@@ -45,22 +45,23 @@
         </div>
     </nav>
 
-    <!-- MAIN GRID -->
-    <main class="pt-24 pb-12 px-6 max-w-6xl mx-auto">
+    <!-- MAIN GRID (Geändert auf 2 Spalten mobil) -->
+    <main class="pt-24 pb-12 px-4 max-w-6xl mx-auto">
         <div v-if="!isLoggedIn" class="text-center py-20 opacity-20 uppercase font-black tracking-widest text-xs">Bitte mit Google verbinden</div>
-        <div v-else class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-10">
+        <div v-else class="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-10">
             <div v-for="recipe in recipes" :key="recipe.id" 
                  class="card-container group cursor-pointer"
                  @mousemove="handleMouseMove($event)"
                  @mouseleave="handleMouseLeave($event)"
                  @click="viewRecipe(recipe)">
                 <div class="recipe-card relative aspect-[3/4] overflow-hidden">
+                    <!-- Farbe aktiviert (grayscale entfernt) -->
                     <img :src="recipe.imageUrl || 'https://via.placeholder.com/600x800?text=RAW'" 
-                         class="w-full h-full object-cover grayscale group-hover:grayscale-0 transition-all duration-700 pointer-events-none">
+                         class="w-full h-full object-cover transition-all duration-700 pointer-events-none">
                     <div class="absolute inset-0 bg-gradient-to-t from-black via-transparent to-transparent opacity-80 pointer-events-none"></div>
-                    <div class="absolute bottom-0 p-8 pointer-events-none">
-                        <p class="text-[10px] font-black opacity-30 tracking-[0.3em] mb-2 uppercase">{{ recipe.totalPrice.toFixed(2) }} EUR</p>
-                        <h3 class="text-3xl font-black uppercase tracking-tighter leading-none">{{ recipe.name }}</h3>
+                    <div class="absolute bottom-0 p-4 sm:p-8 pointer-events-none">
+                        <p class="text-[8px] sm:text-[10px] font-black opacity-30 tracking-[0.3em] mb-1 sm:mb-2 uppercase">{{ recipe.totalPrice.toFixed(2) }} EUR</p>
+                        <h3 class="text-lg sm:text-3xl font-black uppercase tracking-tighter leading-none">{{ recipe.name }}</h3>
                     </div>
                 </div>
             </div>
@@ -105,9 +106,9 @@
             </div>
 
             <div class="flex flex-col gap-4 pt-10 pb-20 border-t border-white/10">
-                <div class="flex justify-between items-end mb-4">
-                    <span class="text-[10px] font-black opacity-30 uppercase tracking-widest">Gesamtkosten</span>
-                    <span class="text-4xl font-black tracking-tighter">{{ currentTotal.toFixed(2) }} €</span>
+                <div class="flex justify-between items-end mb-4 font-black">
+                    <span class="text-[10px] opacity-30 uppercase tracking-widest">Gesamtkosten</span>
+                    <span class="text-4xl tracking-tighter">{{ currentTotal.toFixed(2) }} €</span>
                 </div>
                 <div class="grid grid-cols-2 gap-4">
                     <button @click="closeModal" class="btn-cancel">Abbrechen</button>
@@ -129,8 +130,11 @@
         <div class="grid grid-cols-1 md:grid-cols-7 gap-4 w-full">
             <div v-for="(day, idx) in days" :key="day" class="border border-white/10 p-6 bg-neutral-900 flex flex-col items-center text-center">
                 <p class="text-[10px] font-black uppercase opacity-30 tracking-widest mb-6">{{ day }}</p>
-                <div v-if="weeklyPlan[idx]" class="space-y-4">
-                    <img :src="weeklyPlan[idx].imageUrl" class="w-24 h-24 object-cover rounded-full grayscale">
+                <div v-if="weeklyPlan[idx]" class="space-y-4 flex flex-col items-center">
+                    <div class="w-24 h-24 overflow-hidden rounded-full border border-white/10">
+                        <!-- Farbe aktiviert -->
+                        <img :src="weeklyPlan[idx].imageUrl" class="w-full h-full object-cover">
+                    </div>
                     <p class="text-xl font-black uppercase tracking-tighter leading-tight">{{ weeklyPlan[idx].name }}</p>
                 </div>
                 <div v-else class="text-[10px] uppercase font-bold opacity-10 py-10">Leer</div>
@@ -184,7 +188,6 @@
             const handleAuth = () => tokenClient.requestAccessToken();
 
             const setupDriveStructure = async () => {
-                // Ordner "Rezepte" suchen oder erstellen
                 const resp = await gapi.client.drive.files.list({
                     q: "name = 'Rezepte' and mimeType = 'application/vnd.google-apps.folder' and trashed = false",
                 });
@@ -223,19 +226,13 @@
                 const formData = new FormData();
                 formData.append('metadata', new Blob([JSON.stringify(metadata)], { type: 'application/json' }));
                 formData.append('file', file);
-
                 const resp = await fetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id', {
                     method: 'POST',
                     headers: new Headers({ 'Authorization': 'Bearer ' + gapi.auth.getToken().access_token }),
                     body: formData
                 });
                 const result = await resp.json();
-                
-                // Permission auf 'anyone with link' setzen, um Bild anzuzeigen
-                await gapi.client.drive.permissions.create({
-                    fileId: result.id, resource: { role: 'reader', type: 'anyone' }
-                });
-                
+                await gapi.client.drive.permissions.create({ fileId: result.id, resource: { role: 'reader', type: 'anyone' } });
                 return `https://lh3.googleusercontent.com/u/0/d/${result.id}`;
             };
 
@@ -254,7 +251,6 @@
                 try {
                     let finalImageUrl = form.value.imageUrl;
                     if (selectedFile.value) finalImageUrl = await uploadImage(selectedFile.value);
-
                     const recipeData = {
                         id: isEditing.value ? editingId.value : Date.now().toString(),
                         name: form.value.name.toUpperCase(),
@@ -263,7 +259,6 @@
                         instructions: form.value.instructions,
                         totalPrice: currentTotal.value
                     };
-
                     if (isEditing.value) {
                         const idx = recipes.value.findIndex(r => r.id === editingId.value);
                         recipes.value[idx] = recipeData;
@@ -284,7 +279,6 @@
                 }
             };
 
-            // UI Logik (unverändert)
             const currentTotal = computed(() => form.value.ingredients.reduce((sum, ing) => sum + (parseFloat(ing.price) || 0), 0));
             const handleFileUpload = (e) => { const file = e.target.files[0]; if (!file) return; selectedFile.value = file; previewImage.value = URL.createObjectURL(file); };
             const closeModal = () => { modalOpen.value = false; previewImage.value = null; selectedFile.value = null; document.body.style.overflow = "auto"; };
