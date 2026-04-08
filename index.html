@@ -18,23 +18,29 @@
         @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;700;900&display=swap');
         [v-cloak] { display: none; }
         body { background-color: #000; color: #fff; font-family: 'Inter', sans-serif; overscroll-behavior-y: contain; }
-        .card-container { perspective: 1200px; }
         .recipe-card { background: #0d0d0d; border: 1px solid rgba(255,255,255,0.1); transform-style: preserve-3d; }
         .input-raw { background: #111 !important; border: 1px solid rgba(255,255,255,0.1) !important; padding: 1rem; width: 100%; outline: none; color: #fff; font-weight: 700; border-radius: 8px; }
         .input-raw:focus { border-color: #fff !important; }
         .btn-main { background: #fff; color: #000; font-weight: 900; text-transform: uppercase; padding: 1rem; letter-spacing: 0.1em; cursor: pointer; text-align: center; border-radius: 8px; width: 100%; }
         .fixed-overlay { position: fixed; inset: 0; z-index: 200; background: #000; display: flex; flex-direction: column; }
         .no-scrollbar::-webkit-scrollbar { display: none; }
+        .loading-overlay { position: fixed; inset: 0; z-index: 300; background: rgba(0,0,0,0.85); backdrop-filter: blur(10px); display: flex; align-items: center; justify-center: center; flex-direction: column; }
     </style>
 </head>
 <body>
 
 <div id="app" v-cloak>
+    <!-- Lade-Bildschirm -->
+    <div v-if="globalLoading" class="loading-overlay">
+        <div class="animate-spin mb-4"><i data-lucide="refresh-cw" size="48"></i></div>
+        <p class="uppercase font-black tracking-widest text-xs">{{ loadingText }}</p>
+    </div>
+
     <!-- NAV -->
     <nav class="fixed top-0 w-full z-[100] px-6 py-6 flex justify-between items-center bg-black/80 backdrop-blur-xl border-b border-white/5">
         <h1 class="text-2xl font-black tracking-tighter uppercase italic">Recipe<span class="opacity-30">.Raw</span></h1>
         <div class="flex gap-4">
-            <button v-if="!isLoggedIn" @click="handleAuth" class="text-[10px] font-black border border-white/20 px-4 py-2 uppercase tracking-widest">Login</button>
+            <button v-if="!isLoggedIn" @click="handleAuth" class="text-[10px] font-black border border-white/20 px-4 py-2 uppercase tracking-widest">Connect</button>
             <template v-else>
                 <button @click="openWeekly" class="p-2 opacity-50"><i data-lucide="calendar-days"></i></button>
                 <button @click="openAdd" class="bg-white text-black p-2 rounded-full"><i data-lucide="plus"></i></button>
@@ -45,7 +51,7 @@
     <!-- GRID -->
     <main class="pt-28 pb-20 px-4 max-w-5xl mx-auto">
         <div v-if="isLoggedIn" class="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-            <div v-for="recipe in recipes" :key="recipe.id" class="card-container group cursor-pointer" @click="viewRecipe(recipe)">
+            <div v-for="recipe in recipes" :key="recipe.id" class="group cursor-pointer" @click="viewRecipe(recipe)">
                 <div class="recipe-card relative aspect-[3/4] overflow-hidden rounded-2xl">
                     <img :src="recipe.imageUrl || 'https://via.placeholder.com/400x600?text=RAW'" class="w-full h-full object-cover">
                     <div class="absolute inset-0 bg-gradient-to-t from-black via-transparent to-transparent opacity-80"></div>
@@ -61,7 +67,7 @@
     <!-- MODAL -->
     <div v-if="modalOpen" class="fixed-overlay no-scrollbar overflow-y-auto">
         <header class="sticky top-0 bg-black p-6 border-b border-white/10 flex justify-between items-center z-10">
-            <h2 class="text-xs font-black uppercase">{{ isEditing ? 'Edit' : 'New' }}</h2>
+            <h2 class="text-xs font-black uppercase">{{ isEditing ? 'Rezept Bearbeiten' : 'Neues Rezept' }}</h2>
             <button @click="modalOpen = false" class="p-2"><i data-lucide="x"></i></button>
         </header>
 
@@ -72,7 +78,7 @@
                 <input type="file" ref="fileInput" class="hidden" @change="handleFile" accept="image/*">
             </div>
 
-            <input v-model="form.name" placeholder="GERICHTSNAME" class="input-raw text-2xl uppercase">
+            <input v-model="form.name" placeholder="NAME DES GERICHTS" class="input-raw text-2xl uppercase">
 
             <div class="space-y-4">
                 <div v-for="(ing, idx) in form.ingredients" :key="idx" class="flex gap-2">
@@ -80,38 +86,38 @@
                     <input v-model.number="ing.price" type="number" placeholder="€" class="input-raw w-24 text-center">
                     <button @click="form.ingredients.splice(idx,1)" class="text-red-500 p-2"><i data-lucide="trash-2"></i></button>
                 </div>
-                <button @click="form.ingredients.push({name:'', price:0})" class="text-[10px] font-black uppercase opacity-50">+ Zutat</button>
+                <button @click="form.ingredients.push({name:'', price:0})" class="text-[10px] font-black uppercase opacity-50 tracking-widest">+ Zutat hinzufügen</button>
             </div>
 
             <textarea v-model="form.instructions" placeholder="ANLEITUNG..." class="input-raw h-48 resize-none"></textarea>
 
             <div class="fixed bottom-0 left-0 w-full p-6 bg-black border-t border-white/5 flex flex-col gap-4">
                 <div class="flex justify-between items-end px-2">
-                    <span class="text-[10px] opacity-30 uppercase font-black">Total</span>
+                    <span class="text-[10px] opacity-30 uppercase font-black tracking-widest">Gesamt</span>
                     <span class="text-3xl font-black tracking-tighter">{{ total.toFixed(2) }} €</span>
                 </div>
                 <button @click="save" :disabled="uploadLoading" class="btn-main">
-                    {{ uploadLoading ? 'Warten...' : 'Speichern' }}
+                    {{ uploadLoading ? 'Wird gespeichert...' : 'Speichern' }}
                 </button>
             </div>
         </div>
     </div>
 
-    <!-- WEEKLY PLAN -->
+    <!-- WOCHENPLAN (SCREENSHOT READY) -->
     <div v-if="weeklyOpen" class="fixed-overlay p-6 overflow-y-auto items-center">
         <div class="w-full max-w-md">
             <header class="flex justify-between items-center mb-10">
-                <h2 class="text-4xl font-black italic uppercase">Weekly</h2>
+                <h2 class="text-4xl font-black italic tracking-tighter uppercase">Wochenplan</h2>
                 <button @click="weeklyOpen = false" class="bg-white text-black p-4 rounded-full"><i data-lucide="arrow-left"></i></button>
             </header>
             <div class="space-y-4 pb-20">
-                <div v-for="(day, idx) in days" :key="day" class="flex flex-col items-center bg-neutral-900 p-6 rounded-[2rem] border border-white/5 text-center">
-                    <p class="text-[10px] font-black opacity-30 uppercase mb-4">{{ day }}</p>
+                <div v-for="(day, idx) in days" :key="day" class="flex flex-col items-center bg-neutral-900 p-6 rounded-[2.5rem] border border-white/5 text-center">
+                    <p class="text-[10px] font-black opacity-30 uppercase tracking-[0.3em] mb-4">{{ day }}</p>
                     <div v-if="weekPlan[idx]" class="w-full space-y-4">
-                        <img :src="weekPlan[idx].imageUrl" class="w-24 h-24 rounded-full mx-auto object-cover border-2 border-white/10">
-                        <p class="font-black uppercase text-xl">{{ weekPlan[idx].name }}</p>
+                        <img :src="weekPlan[idx].imageUrl" class="w-32 h-32 rounded-full mx-auto object-cover border-2 border-white/10">
+                        <p class="font-black uppercase text-xl leading-none">{{ weekPlan[idx].name }}</p>
                     </div>
-                    <div v-else class="py-10 opacity-10">---</div>
+                    <div v-else class="py-10 opacity-10 font-black italic">Noch leer</div>
                 </div>
             </div>
         </div>
@@ -132,13 +138,15 @@
             const weeklyOpen = ref(false);
             const isEditing = ref(false);
             const uploadLoading = ref(false);
+            const globalLoading = ref(false);
+            const loadingText = ref('');
             const previewImage = ref(null);
             const selectedFile = ref(null);
             const folderId = ref(null);
             const dataFileId = ref(null);
             const weekPlan = ref([]);
             const form = ref({ id:'', name:'', imageUrl:'', ingredients:[], instructions:'' });
-            const days = ["Mo", "Di", "Mi", "Do", "Fr", "Sa", "So"];
+            const days = ["Montag", "Dienstag", "Mittwoch", "Donnerstag", "Freitag", "Samstag", "Sonntag"];
 
             let tokenClient;
 
@@ -154,41 +162,54 @@
             });
 
             const initDrive = async () => {
-                const list = await gapi.client.drive.files.list({ q: "name = 'Rezepte' and mimeType = 'application/vnd.google-apps.folder' and trashed = false" });
-                if(list.result.files.length > 0) folderId.value = list.result.files[0].id;
-                else {
-                    const f = await gapi.client.drive.files.create({ resource: { name: 'Rezepte', mimeType: 'application/vnd.google-apps.folder' } });
-                    folderId.value = f.result.id;
-                }
-                const data = await gapi.client.drive.files.list({ q: `name = 'data.json' and '${folderId.value}' in parents and trashed = false` });
-                if(data.result.files.length > 0) {
-                    dataFileId.value = data.result.files[0].id;
-                    const res = await gapi.client.drive.files.get({ fileId: dataFileId.value, alt: 'media' });
-                    recipes.value = res.result || [];
-                } else {
-                    const res = await gapi.client.drive.files.create({ resource: { name: 'data.json', parents: [folderId.value] }, media: { mimeType: 'application/json', body: '[]' } });
-                    dataFileId.value = res.result.id;
-                }
+                globalLoading.value = true;
+                loadingText.value = 'Verbinde mit Drive...';
+                try {
+                    const list = await gapi.client.drive.files.list({ q: "name = 'Rezepte' and mimeType = 'application/vnd.google-apps.folder' and trashed = false" });
+                    if(list.result.files.length > 0) folderId.value = list.result.files[0].id;
+                    else {
+                        const f = await gapi.client.drive.files.create({ resource: { name: 'Rezepte', mimeType: 'application/vnd.google-apps.folder' } });
+                        folderId.value = f.result.id;
+                    }
+                    const data = await gapi.client.drive.files.list({ q: `name = 'data.json' and '${folderId.value}' in parents and trashed = false` });
+                    if(data.result.files.length > 0) {
+                        dataFileId.value = data.result.files[0].id;
+                        const res = await gapi.client.drive.files.get({ fileId: dataFileId.value, alt: 'media' });
+                        recipes.value = Array.isArray(res.result) ? res.result : [];
+                    } else {
+                        const res = await gapi.client.drive.files.create({ resource: { name: 'data.json', parents: [folderId.value] }, media: { mimeType: 'application/json', body: '[]' } });
+                        dataFileId.value = res.result.id;
+                    }
+                } catch(e) { alert("Drive Fehler: " + e.message); }
+                globalLoading.value = false;
                 nextTick(() => lucide.createIcons());
             };
 
             const save = async () => {
-                if(!form.value.name) return;
+                if(!form.value.name) return alert("Bitte Namen eingeben");
                 uploadLoading.value = true;
+                globalLoading.value = true;
+                loadingText.value = 'Speichere Rezept...';
+                
                 try {
+                    // BILD UPLOAD
                     if(selectedFile.value) {
                         const metadata = { name: `img_${Date.now()}.jpg`, parents: [folderId.value] };
                         const formData = new FormData();
                         formData.append('metadata', new Blob([JSON.stringify(metadata)], { type: 'application/json' }));
                         formData.append('file', selectedFile.value);
+                        
                         const imgRes = await fetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id', {
-                            method: 'POST', headers: { Authorization: `Bearer ${gapi.auth.getToken().access_token}` }, body: formData
+                            method: 'POST', 
+                            headers: { Authorization: `Bearer ${gapi.auth.getToken().access_token}` }, 
+                            body: formData
                         });
                         const imgData = await imgRes.json();
                         await gapi.client.drive.permissions.create({ fileId: imgData.id, resource: { role: 'reader', type: 'anyone' } });
                         form.value.imageUrl = `https://lh3.googleusercontent.com/u/0/d/${imgData.id}`;
                     }
 
+                    // DATEN UPDATE
                     const recipe = { ...form.value, totalPrice: total.value };
                     if(isEditing.value) {
                         const idx = recipes.value.findIndex(r => r.id === recipe.id);
@@ -198,23 +219,38 @@
                         recipes.value.unshift(recipe);
                     }
 
-                    await gapi.client.request({
-                        path: `/upload/drive/v3/files/${dataFileId.value}`,
-                        method: 'PATCH', params: { uploadType: 'media' }, body: JSON.stringify(recipes.value)
+                    // SYNC ZU DRIVE
+                    const res = await fetch(`https://www.googleapis.com/upload/drive/v3/files/${dataFileId.value}?uploadType=media`, {
+                        method: 'PATCH',
+                        headers: { 
+                            Authorization: `Bearer ${gapi.auth.getToken().access_token}`,
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify(recipes.value)
                     });
-                    modalOpen.value = false;
-                } catch(e) { alert("Fehler: " + e.message); }
-                finally { uploadLoading.value = false; }
+
+                    if(res.ok) {
+                        alert("Erfolgreich gespeichert!");
+                        modalOpen.value = false;
+                    } else {
+                        throw new Error("Google Drive Sync fehlgeschlagen.");
+                    }
+                } catch(e) { 
+                    alert("Fehler beim Speichern: " + e.message); 
+                } finally { 
+                    uploadLoading.value = false; 
+                    globalLoading.value = false;
+                }
             };
 
             const total = computed(() => form.value.ingredients.reduce((s, i) => s + (Number(i.price) || 0), 0));
 
             return {
-                recipes, isLoggedIn, modalOpen, weeklyOpen, isEditing, form, days, weekPlan, previewImage, uploadLoading, total,
+                recipes, isLoggedIn, modalOpen, weeklyOpen, isEditing, form, days, weekPlan, previewImage, uploadLoading, total, globalLoading, loadingText,
                 handleAuth: () => tokenClient.requestAccessToken(),
                 openAdd: () => { isEditing.value=false; form.value={id:'', name:'', imageUrl:'', ingredients:[{name:'', price:0}], instructions:''}; previewImage.value=null; modalOpen.value=true; nextTick(()=>lucide.createIcons()); },
                 viewRecipe: (r) => { isEditing.value=true; form.value=JSON.parse(JSON.stringify(r)); previewImage.value=null; modalOpen.value=true; nextTick(()=>lucide.createIcons()); },
-                handleFile: (e) => { selectedFile.value = e.target.files[0]; previewImage.value = URL.createObjectURL(selectedFile.value); },
+                handleFile: (e) => { selectedFile.value = e.target.files[0]; if(selectedFile.value) previewImage.value = URL.createObjectURL(selectedFile.value); },
                 openWeekly: () => { weekPlan.value = [...recipes.value].sort(()=>0.5-Math.random()).slice(0,7); weeklyOpen.value=true; nextTick(()=>lucide.createIcons()); },
                 save
             }
