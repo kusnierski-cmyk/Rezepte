@@ -20,9 +20,7 @@
         [v-cloak] { display: none; }
         body { background-color: #000; color: #fff; font-family: 'Inter', sans-serif; overscroll-behavior-y: contain; }
         
-        /* 3D Scroll Reveal Animation */
         .recipe-card-wrapper { opacity: 0; transform: translateY(50px) rotateX(10deg); }
-        
         .recipe-card { background: #0d0d0d; border: 1px solid rgba(255,255,255,0.1); transform-style: preserve-3d; }
         .input-raw { background: #111 !important; border: 1px solid rgba(255,255,255,0.1) !important; padding: 1rem; width: 100%; outline: none; color: #fff; font-weight: 700; border-radius: 8px; }
         .input-raw:focus { border-color: #fff !important; }
@@ -30,8 +28,11 @@
         .btn-main { background: #fff; color: #000; font-weight: 900; text-transform: uppercase; padding: 1.2rem; letter-spacing: 0.1em; cursor: pointer; text-align: center; border-radius: 8px; width: 100%; }
         .fixed-overlay { position: fixed; inset: 0; z-index: 200; background: #000; display: flex; flex-direction: column; }
         .no-scrollbar::-webkit-scrollbar { display: none; }
-        
-        .glass-footer { background: rgba(0,0,0,0.8); backdrop-filter: blur(10px); border-t: 1px solid rgba(255,255,255,0.1); }
+        .glass-footer { background: rgba(0,0,0,0.8); backdrop-filter: blur(10px); border-top: 1px solid rgba(255,255,255,0.1); }
+
+        /* Loading Spinner */
+        .sync-indicator { animation: rotate 2s linear infinite; }
+        @keyframes rotate { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
     </style>
 </head>
 <body>
@@ -40,8 +41,9 @@
     
     <!-- NAVBAR -->
     <nav class="fixed top-0 w-full z-[100] px-6 py-6 flex justify-between items-center bg-black/80 backdrop-blur-xl border-b border-white/5">
-        <h1 @click="vibrate" class="text-2xl font-black tracking-tighter uppercase italic">Recipe<span class="opacity-30">.Raw</span></h1>
-        <div class="flex gap-4">
+        <h1 class="text-2xl font-black tracking-tighter uppercase italic">Recipe<span class="opacity-30">.Raw</span></h1>
+        <div class="flex gap-4 items-center">
+            <div v-if="syncing" class="sync-indicator text-white/20"><i data-lucide="refresh-cw" size="16"></i></div>
             <button v-if="!isLoggedIn" @click="handleAuth(); vibrate()" class="text-[10px] font-black border border-white/20 px-4 py-2 uppercase tracking-widest">Connect</button>
             <template v-else>
                 <button @click="openWeekly(); vibrate()" class="p-2 opacity-50"><i data-lucide="calendar-days"></i></button>
@@ -58,15 +60,18 @@
                     <img :src="recipe.imageUrl || 'https://via.placeholder.com/400x600?text=RAW'" class="w-full h-full object-cover">
                     <div class="absolute inset-0 bg-gradient-to-t from-black via-transparent to-transparent opacity-80"></div>
                     <div class="absolute bottom-0 p-4 w-full">
-                        <p class="text-[8px] font-black opacity-40 uppercase mb-1">{{ (recipe.totalPrice || 0).toFixed(2) }} €</p>
+                        <p class="text-[8px] font-black opacity-40 tracking-widest uppercase mb-1">{{ (recipe.totalPrice || 0).toFixed(2) }} €</p>
                         <h3 class="text-sm font-black uppercase leading-tight">{{ recipe.name }}</h3>
                     </div>
                 </div>
             </div>
         </div>
+        <div v-else class="h-[60vh] flex flex-col items-center justify-center opacity-10">
+            <p class="uppercase font-black tracking-widest text-xs">Waiting for Connection...</p>
+        </div>
     </main>
 
-    <!-- 1. VIEW MODAL (Nur zum Lesen) -->
+    <!-- VIEW MODAL -->
     <div v-if="viewOpen" class="fixed-overlay no-scrollbar overflow-y-auto">
         <div class="relative h-72 w-full flex-shrink-0">
             <img :src="currentRecipe.imageUrl" class="w-full h-full object-cover">
@@ -74,10 +79,8 @@
             <button @click="viewOpen = false; vibrate()" class="absolute top-6 right-6 bg-black/50 p-3 rounded-full backdrop-blur-md"><i data-lucide="x"></i></button>
             <button @click="editRecipe(); vibrate()" class="absolute top-6 left-6 bg-white text-black p-3 rounded-full shadow-xl"><i data-lucide="pencil"></i></button>
         </div>
-
         <div class="p-6 space-y-8 pb-32">
             <h1 class="text-4xl font-black uppercase tracking-tighter">{{ currentRecipe.name }}</h1>
-            
             <div class="space-y-4">
                 <h4 class="text-[10px] font-black opacity-30 tracking-[0.4em] uppercase">Zutaten</h4>
                 <div v-for="ing in currentRecipe.ingredients" class="flex justify-between border-b border-white/5 py-3">
@@ -85,13 +88,11 @@
                     <span class="font-mono text-white/50">{{ (ing.price || 0).toFixed(2) }} €</span>
                 </div>
             </div>
-
             <div class="space-y-4">
                 <h4 class="text-[10px] font-black opacity-30 tracking-[0.4em] uppercase">Anleitung</h4>
                 <p class="text-lg leading-relaxed whitespace-pre-line">{{ currentRecipe.instructions }}</p>
             </div>
         </div>
-
         <div class="fixed bottom-0 left-0 w-full p-6 glass-footer">
             <div class="max-w-2xl mx-auto flex justify-between items-center px-2">
                 <span class="text-[10px] opacity-30 uppercase font-black">Gesamtpreis</span>
@@ -100,43 +101,37 @@
         </div>
     </div>
 
-    <!-- 2. EDIT MODAL (Nur zum Bearbeiten) -->
+    <!-- EDIT MODAL -->
     <div v-if="modalOpen" class="fixed-overlay no-scrollbar overflow-y-auto">
         <header class="sticky top-0 bg-black p-6 border-b border-white/10 flex justify-between items-center z-10">
-            <h2 class="text-xs font-black uppercase">{{ isEditing ? 'Rezept bearbeiten' : 'Neues Rezept' }}</h2>
+            <h2 class="text-xs font-black uppercase">{{ isEditing ? 'Bearbeiten' : 'Neu' }}</h2>
             <button @click="modalOpen = false; vibrate()" class="p-2"><i data-lucide="x"></i></button>
         </header>
-
         <div class="p-6 space-y-8 max-w-2xl mx-auto w-full pb-32">
             <div @click="$refs.fileInput.click(); vibrate()" class="aspect-video bg-neutral-900 border border-white/5 flex items-center justify-center overflow-hidden rounded-2xl relative">
                 <img v-if="previewImage || form.imageUrl" :src="previewImage || form.imageUrl" class="absolute inset-0 w-full h-full object-cover opacity-50">
                 <i data-lucide="camera" class="opacity-20"></i>
                 <input type="file" ref="fileInput" class="hidden" @change="handleFile" accept="image/*">
             </div>
-
-            <input v-model="form.name" placeholder="NAME DES GERICHTS" class="input-raw text-2xl uppercase">
-
+            <input v-model="form.name" placeholder="GERICHTSNAME" class="input-raw text-2xl uppercase">
             <div class="space-y-4">
                 <div v-for="(ing, idx) in form.ingredients" :key="idx" class="flex gap-2 items-center">
                     <input v-model="ing.name" placeholder="Zutat" class="input-raw">
-                    <!-- Preisfeld startet leer durch Initialisierung als leerer String -->
                     <input v-model="ing.price" type="number" placeholder="€" class="input-raw w-24 text-center">
                     <button @click="form.ingredients.splice(idx,1); vibrate()" class="text-red-500 p-2"><i data-lucide="trash-2"></i></button>
                 </div>
-                <button @click="form.ingredients.push({name:'', price:''}); vibrate()" class="text-[10px] font-black uppercase opacity-50 tracking-widest">+ Zutat hinzufügen</button>
+                <button @click="form.ingredients.push({name:'', price:''}); vibrate()" class="text-[10px] font-black uppercase opacity-50 tracking-widest">+ Hinzufügen</button>
             </div>
-
             <textarea v-model="form.instructions" placeholder="ANLEITUNG..." class="input-raw h-48 resize-none"></textarea>
-
             <div class="fixed bottom-0 left-0 w-full p-6 bg-black border-t border-white/5 flex flex-col gap-4">
-                <div class="flex justify-between items-end px-2">
-                    <span class="text-[10px] opacity-30 uppercase font-black">Vorschau Gesamt</span>
-                    <span class="text-3xl font-black tracking-tighter">{{ editTotal.toFixed(2) }} €</span>
+                <div class="flex justify-between items-end px-2 font-black">
+                    <span class="text-[10px] opacity-30 uppercase">Vorschau Gesamt</span>
+                    <span class="text-3xl tracking-tighter">{{ editTotal.toFixed(2) }} €</span>
                 </div>
                 <button @click="save(); vibrate()" :disabled="uploadLoading" class="btn-main">
                     {{ uploadLoading ? 'Warten...' : 'Speichern' }}
                 </button>
-                <button v-if="isEditing" @click="deleteRecipe(); vibrate()" class="text-red-500 font-black text-[10px] uppercase opacity-50">Rezept Löschen</button>
+                <button v-if="isEditing" @click="deleteRecipe(); vibrate()" class="text-red-500 font-black text-[10px] uppercase opacity-50">Löschen</button>
             </div>
         </div>
     </div>
@@ -153,9 +148,9 @@
                     <p class="text-[10px] font-black opacity-30 uppercase tracking-[0.3em] mb-4">{{ day }}</p>
                     <div v-if="weekPlan[idx]" class="w-full space-y-4">
                         <img :src="weekPlan[idx].imageUrl" class="w-32 h-32 rounded-full mx-auto object-cover border-2 border-white/10">
-                        <p class="font-black uppercase text-xl leading-none">{{ weekPlan[idx].name }}</p>
+                        <p class="font-black uppercase text-xl leading-none px-4">{{ weekPlan[idx].name }}</p>
                     </div>
-                    <div v-else class="py-10 opacity-10 font-black italic">---</div>
+                    <div v-else class="py-10 opacity-10">---</div>
                 </div>
             </div>
         </div>
@@ -172,6 +167,7 @@
         setup() {
             const recipes = ref([]);
             const isLoggedIn = ref(false);
+            const syncing = ref(false);
             const modalOpen = ref(false);
             const viewOpen = ref(false);
             const weeklyOpen = ref(false);
@@ -188,11 +184,7 @@
 
             let tokenClient;
 
-            const vibrate = () => {
-                if (window.navigator && window.navigator.vibrate) {
-                    window.navigator.vibrate(20);
-                }
-            };
+            const vibrate = () => { if (window.navigator && window.navigator.vibrate) window.navigator.vibrate(20); };
 
             onMounted(() => {
                 gsap.registerPlugin(ScrollTrigger);
@@ -200,12 +192,24 @@
                     await gapi.client.init({ apiKey: API_KEY, discoveryDocs: ["https://www.googleapis.com/discovery/v1/apis/drive/v3/rest"] });
                     tokenClient = google.accounts.oauth2.initTokenClient({
                         client_id: CLIENT_ID, scope: 'https://www.googleapis.com/auth/drive.file',
-                        callback: async (res) => { if(!res.error) { isLoggedIn.value=true; await initDrive(); } }
+                        callback: async (res) => { 
+                            if(!res.error) { 
+                                isLoggedIn.value=true; 
+                                localStorage.setItem('raw_connected', 'true');
+                                await initDrive(); 
+                            } 
+                        }
                     });
+                    
+                    // Auto Reconnect
+                    if (localStorage.getItem('raw_connected') === 'true') {
+                        tokenClient.requestAccessToken({ prompt: '' });
+                    }
                 });
             });
 
             const initDrive = async () => {
+                syncing.value = true;
                 const list = await gapi.client.drive.files.list({ q: "name = 'Rezepte' and mimeType = 'application/vnd.google-apps.folder' and trashed = false" });
                 if(list.result.files.length > 0) folderId.value = list.result.files[0].id;
                 else {
@@ -222,6 +226,7 @@
                     const res = await gapi.client.drive.files.create({ resource: { name: 'data.json', parents: [folderId.value] }, media: { mimeType: 'application/json', body: '[]' } });
                     dataFileId.value = res.result.id;
                 }
+                syncing.value = false;
                 nextTick(() => lucide.createIcons());
             };
 
@@ -229,8 +234,8 @@
                 nextTick(() => {
                     gsap.utils.toArray(".recipe-card-wrapper").forEach((card, i) => {
                         gsap.to(card, {
-                            scrollTrigger: { trigger: card, start: "top 90%" },
-                            opacity: 1, y: 0, rotateX: 0, duration: 0.8, ease: "power4.out", delay: (i % 2) * 0.1
+                            scrollTrigger: { trigger: card, start: "top 95%" },
+                            opacity: 1, y: 0, rotateX: 0, duration: 0.8, ease: "power4.out"
                         });
                     });
                 });
@@ -241,9 +246,9 @@
                 uploadLoading.value = true;
                 try {
                     if(selectedFile.value) {
-                        const metadata = { name: `img_${Date.now()}.jpg`, parents: [folderId.value] };
+                        const meta = { name: `img_${Date.now()}.jpg`, parents: [folderId.value] };
                         const formData = new FormData();
-                        formData.append('metadata', new Blob([JSON.stringify(metadata)], { type: 'application/json' }));
+                        formData.append('metadata', new Blob([JSON.stringify(meta)], { type: 'application/json' }));
                         formData.append('file', selectedFile.value);
                         const imgRes = await fetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id', {
                             method: 'POST', headers: { Authorization: `Bearer ${gapi.auth.getToken().access_token}` }, body: formData
@@ -269,14 +274,14 @@
                     modalOpen.value = false;
                     viewOpen.value = false;
                     initScrollAnims();
-                } catch(e) { alert("Fehler: " + e.message); }
+                } catch(e) { alert("Drive Error: " + e.message); }
                 finally { uploadLoading.value = false; }
             };
 
             const editTotal = computed(() => form.value.ingredients.reduce((s, i) => s + (Number(i.price) || 0), 0));
 
             return {
-                recipes, isLoggedIn, modalOpen, viewOpen, weeklyOpen, isEditing, form, days, weekPlan, previewImage, uploadLoading, editTotal, currentRecipe, vibrate,
+                recipes, isLoggedIn, modalOpen, viewOpen, weeklyOpen, isEditing, form, days, weekPlan, previewImage, uploadLoading, editTotal, currentRecipe, vibrate, syncing,
                 handleAuth: () => tokenClient.requestAccessToken(),
                 openAdd: () => { isEditing.value=false; form.value={id:'', name:'', imageUrl:'', ingredients:[{name:'', price:''}], instructions:''}; previewImage.value=null; modalOpen.value=true; nextTick(()=>lucide.createIcons()); },
                 viewRecipe: (r) => { currentRecipe.value = r; viewOpen.value = true; nextTick(()=>lucide.createIcons()); },
