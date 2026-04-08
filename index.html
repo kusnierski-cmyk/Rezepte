@@ -10,7 +10,6 @@
     <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.2/gsap.min.js"></script>
     <script src="https://unpkg.com/lucide@latest"></script>
-    <!-- Google API Loader -->
     <script src="https://apis.google.com/js/api.js"></script>
     <script src="https://accounts.google.com/gsi/client"></script>
 
@@ -32,13 +31,13 @@
 <body>
 
 <div id="app" v-cloak>
-    
     <!-- NAVBAR -->
     <nav class="fixed top-0 w-full z-[100] px-6 py-6 flex justify-between items-center bg-black border-b border-white/5">
         <h1 class="text-2xl font-black tracking-tighter uppercase leading-none italic">Rezept<span class="opacity-30">.Raw</span></h1>
         <div class="flex gap-4 items-center">
             <button v-if="!isLoggedIn" @click="handleAuth" class="text-[10px] font-black border border-white/20 px-3 py-1 uppercase tracking-widest">Login</button>
             <template v-else>
+                <div v-if="syncing" class="animate-spin text-white/20"><i data-lucide="refresh-cw" size="16"></i></div>
                 <button @click="openWeeklyPlan" class="p-2 opacity-50 hover:opacity-100 transition"><i data-lucide="calendar"></i></button>
                 <button @click="openAddModal" class="bg-white text-black p-2 rounded-full"><i data-lucide="plus"></i></button>
             </template>
@@ -67,7 +66,7 @@
         </div>
     </main>
 
-    <!-- MODAL (REZEPT) -->
+    <!-- MODAL -->
     <div v-if="modalOpen" class="fixed-overlay no-scrollbar overflow-y-auto">
         <div class="sticky top-0 z-[210] bg-black px-6 py-6 border-b border-white/10 flex justify-between items-center">
             <h2 class="text-xs font-black uppercase tracking-[0.4em]">{{ isEditing ? 'Rezept bearbeiten' : 'Neues Rezept' }}</h2>
@@ -79,43 +78,43 @@
                 <img v-if="previewImage || form.imageUrl" :src="previewImage || form.imageUrl" class="absolute inset-0 w-full h-full object-cover opacity-40 group-hover:opacity-100 transition">
                 <div class="relative z-10 text-center">
                     <i data-lucide="camera" class="mx-auto mb-2 opacity-30"></i>
-                    <span class="text-[10px] font-black uppercase tracking-widest">{{ uploadLoading ? 'Wird hochgeladen...' : 'Tippen zum Foto hinzufügen' }}</span>
+                    <span class="text-[10px] font-black uppercase tracking-widest">{{ uploadLoading ? 'Wird hochgeladen...' : 'Foto hinzufügen' }}</span>
                 </div>
                 <input type="file" ref="fileInput" class="hidden" @change="handleFileUpload" accept="image/*">
             </div>
 
             <div class="space-y-4">
-                <label class="text-[10px] font-black uppercase opacity-30 tracking-widest">Name des Gerichts</label>
-                <input v-model="form.name" placeholder="Z.B. CARBONARA" class="input-raw text-3xl uppercase tracking-tighter">
+                <label class="text-[10px] font-black uppercase opacity-30 tracking-widest">Name</label>
+                <input v-model="form.name" class="input-raw text-3xl uppercase tracking-tighter">
             </div>
 
             <div class="space-y-6">
-                <label class="text-[10px] font-black uppercase opacity-30 tracking-widest">Zutaten & Preise</label>
+                <label class="text-[10px] font-black uppercase opacity-30 tracking-widest">Zutaten</label>
                 <div v-for="(ing, index) in form.ingredients" :key="index" class="flex gap-2">
                     <input v-model="ing.name" placeholder="Zutat" class="input-raw">
                     <input type="number" v-model.number="ing.price" placeholder="€" class="input-raw w-24 text-center">
                     <button @click="removeIng(index)" class="px-2 opacity-30 hover:opacity-100"><i data-lucide="minus-circle"></i></button>
                 </div>
-                <button @click="addIng" class="text-[10px] font-black uppercase tracking-widest border-b border-white/20 pb-1">+ Zutat hinzufügen</button>
+                <button @click="addIng" class="text-[10px] font-black uppercase tracking-widest border-b border-white/20 pb-1">+ Zutat</button>
             </div>
 
             <div class="space-y-4">
                 <label class="text-[10px] font-black uppercase opacity-30 tracking-widest">Anleitung</label>
-                <textarea v-model="form.instructions" placeholder="Schritt für Schritt..." class="input-raw h-48 resize-none"></textarea>
+                <textarea v-model="form.instructions" class="input-raw h-48 resize-none"></textarea>
             </div>
 
             <div class="flex flex-col gap-4 pt-10 pb-20 border-t border-white/10">
                 <div class="flex justify-between items-end mb-4">
-                    <span class="text-[10px] font-black opacity-30 uppercase tracking-widest">Gesamtkosten</span>
+                    <span class="text-[10px] font-black opacity-30 uppercase tracking-widest">Gesamt</span>
                     <span class="text-4xl font-black tracking-tighter">{{ currentTotal.toFixed(2) }} €</span>
                 </div>
                 <div class="grid grid-cols-2 gap-4">
                     <button @click="closeModal" class="btn-cancel">Abbrechen</button>
-                    <button @click="saveRecipe" :disabled="uploadLoading" class="btn-white">
-                        {{ uploadLoading ? 'Warten...' : 'Speichern' }}
+                    <button @click="saveRecipe" :disabled="uploadLoading || syncing" class="btn-white">
+                        {{ (uploadLoading || syncing) ? 'Warten...' : 'Speichern' }}
                     </button>
                 </div>
-                <button v-if="isEditing" @click="deleteRecipe" class="text-[10px] font-bold text-red-500 uppercase tracking-widest opacity-50 pt-4">Rezept löschen</button>
+                <button v-if="isEditing" @click="deleteRecipe" class="text-[10px] font-bold text-red-500 uppercase tracking-widest opacity-50 pt-4">Löschen</button>
             </div>
         </div>
     </div>
@@ -123,24 +122,20 @@
     <!-- WEEKLY PLAN -->
     <div v-if="weeklyModal" class="fixed-overlay p-6 overflow-y-auto no-scrollbar">
         <div class="flex justify-between items-center mb-8">
-            <h2 class="text-3xl font-black italic tracking-tighter uppercase leading-none">Wochenplan</h2>
+            <h2 class="text-3xl font-black italic tracking-tighter uppercase">Wochenplan</h2>
             <button @click="weeklyModal = false" class="bg-white text-black p-4 rounded-full"><i data-lucide="arrow-left"></i></button>
         </div>
-
-        <button @click="generateNewWeeklyPlan" class="w-full border border-white/20 py-4 text-[10px] font-black uppercase tracking-[0.3em] mb-10 hover:bg-white hover:text-black transition">
-            Neuen Plan würfeln
-        </button>
-        
+        <button @click="generateNewWeeklyPlan" class="w-full border border-white/20 py-4 text-[10px] font-black uppercase tracking-[0.3em] mb-10 hover:bg-white">Neu würfeln</button>
         <div class="grid grid-cols-1 md:grid-cols-7 gap-4 w-full">
-            <div v-for="(day, idx) in days" :key="day" class="border border-white/10 p-6 bg-neutral-900 flex flex-col items-center text-center">
-                <p class="text-[10px] font-black uppercase opacity-30 tracking-widest mb-6">{{ day }}</p>
+            <div v-for="(day, idx) in days" :key="day" class="border border-white/10 p-6 bg-neutral-900 flex flex-col items-center">
+                <p class="text-[10px] font-black uppercase opacity-30 mb-6">{{ day }}</p>
                 <div v-if="weeklyPlan[idx]" class="space-y-4 flex flex-col items-center w-full">
                     <div class="w-24 h-24 overflow-hidden rounded-full border border-white/10">
-                        <img :src="weeklyPlan[idx].imageUrl || 'https://via.placeholder.com/150'" class="w-full h-full object-cover">
+                        <img :src="weeklyPlan[idx].imageUrl" class="w-full h-full object-cover">
                     </div>
-                    <p class="text-xl font-black uppercase tracking-tighter leading-tight text-center">{{ weeklyPlan[idx].name }}</p>
+                    <p class="text-xl font-black uppercase tracking-tighter text-center">{{ weeklyPlan[idx].name }}</p>
                 </div>
-                <div v-else class="text-[10px] uppercase font-bold opacity-10 py-10">Leer</div>
+                <div v-else class="text-[10px] opacity-10 py-10">Leer</div>
             </div>
         </div>
     </div>
@@ -163,6 +158,7 @@
             const isEditing = ref(false);
             const editingId = ref(null);
             const uploadLoading = ref(false);
+            const syncing = ref(false);
             const previewImage = ref(null);
             const selectedFile = ref(null);
             const isLoggedIn = ref(false);
@@ -185,21 +181,17 @@
                             await setupDriveStructure();
                         },
                     });
-
-                    // Auto-Login Check
                     if (localStorage.getItem('raw_recipe_logged_in') === 'true') {
                         tokenClient.requestAccessToken({ prompt: '' });
                     }
-                    
                     lucide.createIcons();
                 });
             });
 
-            const handleAuth = () => tokenClient.requestAccessToken();
-
             const setupDriveStructure = async () => {
                 const resp = await gapi.client.drive.files.list({
                     q: "name = 'Rezepte' and mimeType = 'application/vnd.google-apps.folder' and trashed = false",
+                    fields: "files(id, name)"
                 });
                 if (resp.result.files.length > 0) {
                     folderId.value = resp.result.files[0].id;
@@ -215,27 +207,27 @@
             const loadDataFile = async () => {
                 const resp = await gapi.client.drive.files.list({
                     q: `name = 'rezepte_daten.json' and '${folderId.value}' in parents and trashed = false`,
+                    fields: "files(id, name)"
                 });
+                
                 if (resp.result.files.length > 0) {
+                    // Falls mehrere Dateien existieren, nimm die erste
                     dataFileId.value = resp.result.files[0].id;
-                    const content = await gapi.client.drive.files.get({ fileId: dataFileId.value, alt: 'media' });
+                    const content = await gapi.client.drive.files.get({ 
+                        fileId: dataFileId.value, 
+                        alt: 'media' 
+                    });
                     
                     let data = content.result;
-                    // Robuste Migration: Falls Daten als String kommen, parsen
-                    if (typeof data === 'string') {
-                        try { data = JSON.parse(data); } catch(e) { console.error("Parse Error", e); }
-                    }
-
-                    if (data && data.recipes) {
-                        recipes.value = data.recipes;
-                        weeklyPlan.value = data.weeklyPlan || [];
-                    } else if (Array.isArray(data)) {
-                        // Altes Format (Array) gefunden -> Migrieren
-                        recipes.value = data;
-                        weeklyPlan.value = [];
-                    } else {
-                        recipes.value = [];
-                        weeklyPlan.value = [];
+                    // Migration / Parse Logik
+                    if (data) {
+                        if (data.recipes) {
+                            recipes.value = data.recipes;
+                            weeklyPlan.value = data.weeklyPlan || [];
+                        } else if (Array.isArray(data)) {
+                            recipes.value = data;
+                            weeklyPlan.value = [];
+                        }
                     }
                 } else {
                     const initialData = { recipes: [], weeklyPlan: [] };
@@ -244,64 +236,58 @@
                         media: { mimeType: 'application/json', body: JSON.stringify(initialData) }
                     });
                     dataFileId.value = file.result.id;
-                    recipes.value = [];
-                    weeklyPlan.value = [];
                 }
                 nextTick(() => lucide.createIcons());
             };
 
-            const uploadImage = async (file) => {
-                const metadata = { name: `img_${Date.now()}`, parents: [folderId.value] };
-                const formData = new FormData();
-                formData.append('metadata', new Blob([JSON.stringify(metadata)], { type: 'application/json' }));
-                formData.append('file', file);
-                const resp = await fetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id', {
-                    method: 'POST',
-                    headers: new Headers({ 'Authorization': 'Bearer ' + gapi.auth.getToken().access_token }),
-                    body: formData
-                });
-                const result = await resp.json();
-                await gapi.client.drive.permissions.create({
-                    fileId: result.id, resource: { role: 'reader', type: 'anyone' }
-                });
-                return `https://lh3.googleusercontent.com/u/0/d/${result.id}`;
-            };
-
             const syncData = async () => {
-                const url = `https://www.googleapis.com/upload/drive/v3/files/${dataFileId.value}?uploadType=media`;
+                if (!dataFileId.value) return;
+                syncing.value = true;
                 const fullData = { recipes: recipes.value, weeklyPlan: weeklyPlan.value };
-                await fetch(url, {
-                    method: 'PATCH',
-                    headers: new Headers({ 'Authorization': 'Bearer ' + gapi.auth.getToken().access_token, 'Content-Type': 'application/json' }),
-                    body: JSON.stringify(fullData)
-                });
-            };
-
-            const generateNewWeeklyPlan = async () => {
-                if (recipes.value.length < 1) return alert("Füge erst Rezepte hinzu!");
-                weeklyPlan.value = [...recipes.value].sort(() => 0.5 - Math.random()).slice(0, 7);
-                await syncData();
-            };
-
-            const openWeeklyPlan = () => {
-                weeklyModal.value = true;
-                nextTick(() => lucide.createIcons());
+                
+                try {
+                    await fetch(`https://www.googleapis.com/upload/drive/v3/files/${dataFileId.value}?uploadType=media`, {
+                        method: 'PATCH',
+                        headers: new Headers({ 
+                            'Authorization': 'Bearer ' + gapi.auth.getToken().access_token, 
+                            'Content-Type': 'application/json' 
+                        }),
+                        body: JSON.stringify(fullData)
+                    });
+                } catch (e) { console.error("Sync Error", e); }
+                finally { syncing.value = false; }
             };
 
             const saveRecipe = async () => {
-                if (!form.value.name) return alert("Name eingeben.");
+                if (!form.value.name) return;
                 uploadLoading.value = true;
                 try {
                     let finalImageUrl = form.value.imageUrl;
-                    if (selectedFile.value) finalImageUrl = await uploadImage(selectedFile.value);
+                    if (selectedFile.value) {
+                        const metadata = { name: `img_${Date.now()}`, parents: [folderId.value] };
+                        const formData = new FormData();
+                        formData.append('metadata', new Blob([JSON.stringify(metadata)], { type: 'application/json' }));
+                        formData.append('file', selectedFile.value);
+                        const resp = await fetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id', {
+                            method: 'POST',
+                            headers: new Headers({ 'Authorization': 'Bearer ' + gapi.auth.getToken().access_token }),
+                            body: formData
+                        });
+                        const imgRes = await resp.json();
+                        await gapi.client.drive.permissions.create({ fileId: imgRes.id, resource: { role: 'reader', type: 'anyone' } });
+                        finalImageUrl = `https://lh3.googleusercontent.com/u/0/d/${imgRes.id}`;
+                    }
+
                     const recipeData = {
                         id: isEditing.value ? editingId.value : Date.now().toString(),
                         name: form.value.name.toUpperCase(),
                         imageUrl: finalImageUrl,
                         ingredients: JSON.parse(JSON.stringify(form.value.ingredients)),
                         instructions: form.value.instructions,
-                        totalPrice: currentTotal.value
+                        totalPrice: currentTotal.value,
+                        createdAt: isEditing.value ? form.value.createdAt : new Date().toISOString()
                     };
+
                     if (isEditing.value) {
                         const idx = recipes.value.findIndex(r => r.id === editingId.value);
                         recipes.value[idx] = recipeData;
@@ -310,8 +296,7 @@
                     }
                     await syncData();
                     closeModal();
-                } catch (e) { console.error(e); alert("Fehler beim Speichern in Drive."); }
-                finally { uploadLoading.value = false; }
+                } finally { uploadLoading.value = false; }
             };
 
             const deleteRecipe = async () => {
@@ -323,26 +308,23 @@
             };
 
             const currentTotal = computed(() => form.value.ingredients.reduce((sum, ing) => sum + (parseFloat(ing.price) || 0), 0));
-            const handleFileUpload = (e) => { const file = e.target.files[0]; if (!file) return; selectedFile.value = file; previewImage.value = URL.createObjectURL(file); };
             const closeModal = () => { modalOpen.value = false; previewImage.value = null; selectedFile.value = null; document.body.style.overflow = "auto"; };
             const handleMouseMove = (e) => {
                 const card = e.currentTarget.querySelector('.recipe-card');
                 const rect = e.currentTarget.getBoundingClientRect();
-                const x = (e.clientX - rect.left - rect.width/2) / 10;
-                const y = (e.clientY - rect.top - rect.height/2) / 10;
-                gsap.to(card, { rotationY: x, rotationX: -y, scale: 1.05, duration: 0.3 });
+                gsap.to(card, { rotationY: (e.clientX - rect.left - rect.width/2)/10, rotationX: -(e.clientY - rect.top - rect.height/2)/10, scale: 1.05, duration: 0.3 });
             };
-            const handleMouseLeave = (e) => gsap.to(e.currentTarget.querySelector('.recipe-card'), { rotationY: 0, rotationX: 0, scale: 1, duration: 0.5 });
 
             return {
-                recipes, modalOpen, form, currentTotal, saveRecipe, handleFileUpload, previewImage, 
-                uploadLoading, closeModal, isLoggedIn, handleAuth, deleteRecipe,
+                recipes, modalOpen, form, currentTotal, saveRecipe, handleFileUpload: (e) => { selectedFile.value = e.target.files[0]; previewImage.value = URL.createObjectURL(selectedFile.value); },
+                uploadLoading, syncing, closeModal, isLoggedIn, handleAuth: () => tokenClient.requestAccessToken(), deleteRecipe,
                 viewRecipe: (r) => { isEditing.value = true; editingId.value = r.id; form.value = JSON.parse(JSON.stringify(r)); modalOpen.value = true; document.body.style.overflow = "hidden"; nextTick(() => lucide.createIcons()); },
                 openAddModal: () => { isEditing.value = false; form.value = { name: '', imageUrl: '', ingredients: [{ name: '', price: '' }], instructions: '' }; modalOpen.value = true; document.body.style.overflow = "hidden"; nextTick(() => lucide.createIcons()); },
                 addIng: () => form.value.ingredients.push({ name: '', price: '' }),
                 removeIng: (i) => form.value.ingredients.splice(i, 1),
-                openWeeklyPlan, generateNewWeeklyPlan,
-                weeklyModal, weeklyPlan, days, handleMouseMove, handleMouseLeave
+                openWeeklyPlan: () => { weeklyModal.value = true; nextTick(() => lucide.createIcons()); },
+                generateNewWeeklyPlan: async () => { weeklyPlan.value = [...recipes.value].sort(() => 0.5 - Math.random()).slice(0, 7); await syncData(); },
+                weeklyModal, weeklyPlan, days, handleMouseMove, handleMouseLeave: (e) => gsap.to(e.currentTarget.querySelector('.recipe-card'), { rotationY: 0, rotationX: 0, scale: 1, duration: 0.5 })
             }
         }
     }).mount('#app');
