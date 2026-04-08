@@ -1,4 +1,4 @@
-const CACHE_NAME = 'rezept-raw-v1';
+const CACHE_NAME = 'rezept-raw-unique-v1'; // Name geändert für Eindeutigkeit
 const ASSETS = [
   'index.html',
   'manifest.json',
