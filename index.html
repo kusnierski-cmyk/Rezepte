@@ -66,63 +66,70 @@
 
     <div v-if="modalOpen" class="fixed-overlay no-scrollbar overflow-y-auto">
         <div class="sticky top-0 z-[210] bg-black px-6 py-6 border-b border-white/10 flex justify-between items-center">
-            <h2 class="text-xs font-black uppercase tracking-[0.4em]">{{ isEditing ? 'Bearbeiten' : 'Neu' }}</h2>
+            <h2 class="text-xs font-black uppercase tracking-[0.4em]">{{ isEditing ? 'Rezept bearbeiten' : 'Neues Rezept' }}</h2>
             <button @click="closeModal" class="p-2"><i data-lucide="x"></i></button>
         </div>
 
         <div class="px-6 py-10 space-y-12 max-w-2xl mx-auto w-full">
             <div @click="$refs.fileInput.click()" class="aspect-square sm:aspect-video border border-dashed border-white/20 flex flex-col items-center justify-center relative cursor-pointer group bg-neutral-950">
-                <img v-if="previewImage || form.imageUrl" :src="previewImage || form.imageUrl" class="absolute inset-0 w-full h-full object-cover opacity-40">
+                <img v-if="previewImage || form.imageUrl" :src="previewImage || form.imageUrl" class="absolute inset-0 w-full h-full object-cover opacity-40 group-hover:opacity-100 transition">
                 <div class="relative z-10 text-center">
                     <i data-lucide="camera" class="mx-auto mb-2 opacity-30"></i>
-                    <span class="text-[10px] font-black uppercase">{{ uploadLoading ? 'Lädt...' : 'Foto' }}</span>
+                    <span class="text-[10px] font-black uppercase tracking-widest">{{ uploadLoading ? 'Hochladen...' : 'Foto hinzufügen' }}</span>
                 </div>
                 <input type="file" ref="fileInput" class="hidden" @change="handleFileUpload" accept="image/*">
             </div>
 
-            <input v-model="form.name" placeholder="REZEPT NAME" class="input-raw text-3xl uppercase tracking-tighter">
+            <div class="space-y-4">
+                <label class="text-[10px] font-black uppercase opacity-30 tracking-widest">Name</label>
+                <input v-model="form.name" placeholder="Z.B. PASTA" class="input-raw text-3xl uppercase tracking-tighter">
+            </div>
 
             <div class="space-y-6">
+                <label class="text-[10px] font-black uppercase opacity-30 tracking-widest">Zutaten</label>
                 <div v-for="(ing, index) in form.ingredients" :key="index" class="flex gap-2">
                     <input v-model="ing.name" placeholder="Zutat" class="input-raw">
                     <input type="number" v-model.number="ing.price" placeholder="€" class="input-raw w-24 text-center">
-                    <button @click="removeIng(index)" class="opacity-30"><i data-lucide="minus-circle"></i></button>
+                    <button @click="removeIng(index)" class="px-2 opacity-30"><i data-lucide="minus-circle"></i></button>
                 </div>
-                <button @click="addIng" class="text-[10px] font-black uppercase tracking-widest border-b border-white/20">+ Zutat</button>
+                <button @click="addIng" class="text-[10px] font-black uppercase tracking-widest border-b border-white/20 pb-1">+ Zutat hinzufügen</button>
             </div>
 
-            <textarea v-model="form.instructions" placeholder="Anleitung..." class="input-raw h-48 resize-none"></textarea>
+            <div class="space-y-4">
+                <label class="text-[10px] font-black uppercase opacity-30 tracking-widest">Anleitung</label>
+                <textarea v-model="form.instructions" placeholder="Schritt für Schritt..." class="input-raw h-48 resize-none"></textarea>
+            </div>
 
             <div class="flex flex-col gap-4 pt-10 pb-20 border-t border-white/10">
                 <div class="flex justify-between items-end mb-4 font-black">
-                    <span class="opacity-30 uppercase text-[10px]">Gesamt</span>
+                    <span class="text-[10px] opacity-30 uppercase tracking-widest">Gesamt</span>
                     <span class="text-4xl tracking-tighter">{{ currentTotal.toFixed(2) }} €</span>
                 </div>
                 <div class="grid grid-cols-2 gap-4">
                     <button @click="closeModal" class="btn-cancel">Abbrechen</button>
                     <button @click="saveRecipe" :disabled="uploadLoading || syncing" class="btn-white">Speichern</button>
                 </div>
-                <button v-if="isEditing" @click="deleteRecipe" class="text-red-500 font-bold text-[10px] uppercase pt-4 opacity-50">Löschen</button>
+                <button v-if="isEditing" @click="deleteRecipe" class="text-red-500 font-bold text-[10px] uppercase opacity-50 pt-4">Löschen</button>
             </div>
         </div>
     </div>
 
     <div v-if="weeklyModal" class="fixed-overlay p-6 overflow-y-auto no-scrollbar">
-        <div class="flex justify-between items-center mb-12">
-            <h2 class="text-3xl font-black italic uppercase">Wochenplan</h2>
+        <div class="flex justify-between items-center mb-8">
+            <h2 class="text-3xl font-black italic tracking-tighter uppercase">Wochenplan</h2>
             <button @click="weeklyModal = false" class="bg-white text-black p-4 rounded-full"><i data-lucide="arrow-left"></i></button>
         </div>
-        <button @click="generateNewWeeklyPlan" class="w-full border border-white/20 py-4 text-[10px] font-black uppercase tracking-[0.3em] mb-10 hover:bg-white hover:text-black">Neu würfeln</button>
+        <button @click="generateNewWeeklyPlan" class="w-full border border-white/20 py-4 text-[10px] font-black uppercase tracking-[0.3em] mb-10 hover:bg-white transition">Neu würfeln</button>
         <div class="grid grid-cols-1 md:grid-cols-7 gap-4 w-full">
-            <div v-for="(day, idx) in days" :key="day" class="border border-white/10 p-6 bg-neutral-900 flex flex-col items-center">
-                <p class="text-[10px] font-black opacity-30 mb-6 uppercase">{{ day }}</p>
-                <div v-if="weeklyPlan[idx]" class="space-y-4 flex flex-col items-center">
-                    <div class="w-24 h-24 overflow-hidden rounded-full border border-white/10">
+            <div v-for="(day, idx) in days" :key="day" class="border border-white/10 p-6 bg-neutral-900 flex flex-col items-center text-center">
+                <p class="text-[10px] font-black uppercase opacity-30 tracking-widest mb-6">{{ day }}</p>
+                <div v-if="weeklyPlan[idx]" class="space-y-4 flex flex-col items-center w-full">
+                    <div class="w-24 h-24 overflow-hidden rounded-full border border-white/10 flex items-center justify-center">
                         <img :src="weeklyPlan[idx].imageUrl" class="w-full h-full object-cover">
                     </div>
-                    <p class="text-xl font-black uppercase tracking-tighter text-center">{{ weeklyPlan[idx].name }}</p>
+                    <p class="text-xl font-black uppercase tracking-tighter text-center leading-none">{{ weeklyPlan[idx].name }}</p>
                 </div>
-                <div v-else class="text-[10px] opacity-10 py-10">LEER</div>
+                <div v-else class="text-[10px] opacity-10 py-10 uppercase font-black">Leer</div>
             </div>
         </div>
     </div>
@@ -176,7 +183,6 @@
             });
 
             const setupDrive = async () => {
-                // 1. Ordner "Rezepte" suchen oder erstellen
                 const folderResp = await gapi.client.drive.files.list({
                     q: "name = 'Rezepte' and mimeType = 'application/vnd.google-apps.folder' and trashed = false"
                 });
@@ -187,16 +193,12 @@
                     folderId.value = f.result.id;
                 }
 
-                // 2. Datei "rezepte_daten.json" suchen
                 const fileResp = await gapi.client.drive.files.list({
-                    q: "name = 'rezepte_daten.json' and trashed = false",
-                    fields: "files(id, parents, name)"
+                    q: `name = 'rezepte_daten.json' and '${folderId.value}' in parents and trashed = false`
                 });
 
-                const validFile = fileResp.result.files.find(f => f.parents && f.parents.includes(folderId.value));
-
-                if (validFile) {
-                    dataFileId.value = validFile.id;
+                if (fileResp.result.files.length > 0) {
+                    dataFileId.value = fileResp.result.files[0].id;
                     const content = await gapi.client.drive.files.get({ fileId: dataFileId.value, alt: 'media' });
                     let data = content.result;
                     if (typeof data === 'string') try { data = JSON.parse(data); } catch(e) {}
@@ -207,46 +209,68 @@
                         recipes.value = data;
                     }
                 } else {
-                    const res = await gapi.client.drive.files.create({
-                        resource: { name: 'rezepte_daten.json', parents: [folderId.value] },
-                        fields: 'id'
-                    });
-                    dataFileId.value = res.result.id;
-                    await syncData();
+                    const initial = JSON.stringify({ recipes: [], weeklyPlan: [] });
+                    const res = await multipartUpload('rezepte_daten.json', initial, 'application/json', folderId.value);
+                    dataFileId.value = res.id;
                 }
                 nextTick(() => lucide.createIcons());
+            };
+
+            const multipartUpload = async (name, content, type, parent, fileId = null) => {
+                const boundary = 'foo_bar_baz';
+                const metadata = { name: name };
+                if (parent && !fileId) metadata.parents = [parent];
+
+                const delimiter = "\r\n--" + boundary + "\r\n";
+                const close_delim = "\r\n--" + boundary + "--";
+
+                let body = delimiter + 'Content-Type: application/json; charset=UTF-8\r\n\r\n' + JSON.stringify(metadata);
+                body += delimiter + 'Content-Type: ' + type + '\r\n\r\n';
+                
+                if (type === 'application/json') {
+                    body += content + close_delim;
+                } else {
+                    // Für Bilder müssen wir ein ArrayBuffer/Blob Handling machen
+                    const reader = new FileReader();
+                    return new Promise((resolve) => {
+                        reader.readAsArrayBuffer(content);
+                        reader.onload = async () => {
+                            const buffer = reader.result;
+                            const pre = new TextEncoder().encode(body);
+                            const post = new TextEncoder().encode(close_delim);
+                            const final = new Uint8Array(pre.byteLength + buffer.byteLength + post.byteLength);
+                            final.set(pre);
+                            final.set(new Uint8Array(buffer), pre.byteLength);
+                            final.set(post, pre.byteLength + buffer.byteLength);
+
+                            const resp = await fetch(`https://www.googleapis.com/upload/drive/v3/files${fileId ? '/' + fileId : ''}?uploadType=multipart`, {
+                                method: fileId ? 'PATCH' : 'POST',
+                                headers: { 'Authorization': 'Bearer ' + gapi.auth.getToken().access_token, 'Content-Type': `multipart/related; boundary=${boundary}` },
+                                body: final
+                            });
+                            resolve(await resp.json());
+                        };
+                    });
+                }
+
+                const resp = await fetch(`https://www.googleapis.com/upload/drive/v3/files${fileId ? '/' + fileId : ''}?uploadType=multipart`, {
+                    method: fileId ? 'PATCH' : 'POST',
+                    headers: { 'Authorization': 'Bearer ' + gapi.auth.getToken().access_token, 'Content-Type': `multipart/related; boundary=${boundary}` },
+                    body: body
+                });
+                return await resp.json();
             };
 
             const syncData = async () => {
                 if (!dataFileId.value) return;
                 syncing.value = true;
-                const body = JSON.stringify({ recipes: recipes.value, weeklyPlan: weeklyPlan.value });
-                await gapi.client.request({
-                    path: `/upload/drive/v3/files/${dataFileId.value}`,
+                const content = JSON.stringify({ recipes: recipes.value, weeklyPlan: weeklyPlan.value });
+                await fetch(`https://www.googleapis.com/upload/drive/v3/files/${dataFileId.value}?uploadType=media`, {
                     method: 'PATCH',
-                    params: { uploadType: 'media' },
-                    body: body
+                    headers: { 'Authorization': 'Bearer ' + gapi.auth.getToken().access_token, 'Content-Type': 'application/json' },
+                    body: content
                 });
                 syncing.value = false;
-            };
-
-            const uploadImage = async (file) => {
-                // Erst Datei erstellen mit korrektem Namen und Elternordner
-                const res = await gapi.client.drive.files.create({
-                    resource: { name: `img_${Date.now()}.jpg`, parents: [folderId.value] },
-                    fields: 'id'
-                });
-                const fileId = res.result.id;
-                // Dann Inhalt hochladen
-                await gapi.client.request({
-                    path: `/upload/drive/v3/files/${fileId}`,
-                    method: 'PATCH',
-                    params: { uploadType: 'media' },
-                    body: file
-                });
-                // Berechtigungen setzen
-                await gapi.client.drive.permissions.create({ fileId: fileId, resource: { role: 'reader', type: 'anyone' } });
-                return `https://lh3.googleusercontent.com/u/0/d/${fileId}`;
             };
 
             const saveRecipe = async () => {
@@ -254,7 +278,11 @@
                 uploadLoading.value = true;
                 try {
                     let imgUrl = form.value.imageUrl;
-                    if (selectedFile.value) imgUrl = await uploadImage(selectedFile.value);
+                    if (selectedFile.value) {
+                        const res = await multipartUpload(`img_${Date.now()}.jpg`, selectedFile.value, 'image/jpeg', folderId.value);
+                        await gapi.client.drive.permissions.create({ fileId: res.id, resource: { role: 'reader', type: 'anyone' } });
+                        imgUrl = `https://lh3.googleusercontent.com/u/0/d/${res.id}`;
+                    }
                     const newR = {
                         id: isEditing.value ? editingId.value : Date.now().toString(),
                         name: form.value.name.toUpperCase(),
