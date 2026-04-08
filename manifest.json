@@ -1,13 +1,13 @@
 {
-  "name": "REZEPT.RAW",
+  "name": "REZEPT RAW",
   "short_name": "Rezept",
   "description": "Deine ultimative Rezept-App mit Google Drive Cloud-Speicher und 3D-Animationen.",
-  "id": "/",
-  "start_url": "/index.html",
+  "lang": "de-DE",
+  "start_url": "/Rezepte/index.html",
+  "id": "/Rezepte/",
   "display": "standalone",
-  "background_color": "#000000",
   "theme_color": "#000000",
-  "orientation": "portrait",
+  "background_color": "#000000",
   "icons": [
     {
       "src": "Rezept.png",
