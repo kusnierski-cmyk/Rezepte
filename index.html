@@ -39,14 +39,13 @@
         <div class="flex gap-4 items-center">
             <button v-if="!isLoggedIn" @click="handleAuth" class="text-[10px] font-black border border-white/20 px-3 py-1 uppercase tracking-widest">Login</button>
             <template v-else>
-                <!-- Buttons verknüpft mit generateWeeklyPlan und openAddModal -->
                 <button @click="generateWeeklyPlan" class="p-2 opacity-50 hover:opacity-100 transition"><i data-lucide="calendar"></i></button>
                 <button @click="openAddModal" class="bg-white text-black p-2 rounded-full"><i data-lucide="plus"></i></button>
             </template>
         </div>
     </nav>
 
-    <!-- MAIN GRID (Geändert auf 2 Spalten für mobile/kleine Ansicht) -->
+    <!-- MAIN GRID (Zwei nebeneinander auf Mobilgeräten) -->
     <main class="pt-24 pb-12 px-4 max-w-6xl mx-auto">
         <div v-if="!isLoggedIn" class="text-center py-20 opacity-20 uppercase font-black tracking-widest text-xs">Bitte mit Google verbinden</div>
         <div v-else class="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-10">
@@ -56,20 +55,20 @@
                  @mouseleave="handleMouseLeave($event)"
                  @click="viewRecipe(recipe)">
                 <div class="recipe-card relative aspect-[3/4] overflow-hidden">
-                    <!-- Farbe aktiviert -->
+                    <!-- Farbe aktiviert (grayscale entfernt) -->
                     <img :src="recipe.imageUrl || 'https://via.placeholder.com/600x800?text=RAW'" 
                          class="w-full h-full object-cover transition-all duration-700 pointer-events-none">
                     <div class="absolute inset-0 bg-gradient-to-t from-black via-transparent to-transparent opacity-80 pointer-events-none"></div>
-                    <div class="absolute bottom-0 p-4 sm:p-8 pointer-events-none w-full">
+                    <div class="absolute bottom-0 p-4 sm:p-8 pointer-events-none">
                         <p class="text-[8px] sm:text-[10px] font-black opacity-30 tracking-[0.3em] mb-1 sm:mb-2 uppercase">{{ recipe.totalPrice.toFixed(2) }} EUR</p>
-                        <h3 class="text-lg sm:text-3xl font-black uppercase tracking-tighter leading-none text-white">{{ recipe.name }}</h3>
+                        <h3 class="text-lg sm:text-3xl font-black uppercase tracking-tighter leading-none">{{ recipe.name }}</h3>
                     </div>
                 </div>
             </div>
         </div>
     </main>
 
-    <!-- MODAL (REZEPT) -->
+    <!-- MODAL (ZUFÜGEN / EDITIEREN) -->
     <div v-if="modalOpen" class="fixed-overlay no-scrollbar overflow-y-auto">
         <div class="sticky top-0 z-[210] bg-black px-6 py-6 border-b border-white/10 flex justify-between items-center">
             <h2 class="text-xs font-black uppercase tracking-[0.4em]">{{ isEditing ? 'Rezept bearbeiten' : 'Neues Rezept' }}</h2>
@@ -107,20 +106,22 @@
             </div>
 
             <div class="flex flex-col gap-4 pt-10 pb-20 border-t border-white/10">
-                <div class="flex justify-between items-end mb-4 font-black">
-                    <span class="text-[10px] opacity-30 uppercase tracking-widest">Gesamtkosten</span>
-                    <span class="text-4xl tracking-tighter">{{ currentTotal.toFixed(2) }} €</span>
+                <div class="flex justify-between items-end mb-4">
+                    <span class="text-[10px] font-black opacity-30 uppercase tracking-widest">Gesamtkosten</span>
+                    <span class="text-4xl font-black tracking-tighter">{{ currentTotal.toFixed(2) }} €</span>
                 </div>
                 <div class="grid grid-cols-2 gap-4">
                     <button @click="closeModal" class="btn-cancel">Abbrechen</button>
-                    <button @click="saveRecipe" :disabled="uploadLoading" class="btn-white">Speichern</button>
+                    <button @click="saveRecipe" :disabled="uploadLoading" class="btn-white">
+                        {{ uploadLoading ? 'Warten...' : 'Speichern' }}
+                    </button>
                 </div>
                 <button v-if="isEditing" @click="deleteRecipe" class="text-[10px] font-bold text-red-500 uppercase tracking-widest opacity-50 pt-4">Rezept löschen</button>
             </div>
         </div>
     </div>
 
-    <!-- WEEKLY PLAN -->
+    <!-- WEEKLY PLAN (Alle Bilder zentriert) -->
     <div v-if="weeklyModal" class="fixed-overlay p-6 overflow-y-auto no-scrollbar">
         <div class="flex justify-between items-center mb-12">
             <h2 class="text-4xl font-black italic tracking-tighter uppercase leading-none">Wochenplan</h2>
@@ -129,9 +130,8 @@
         <div class="grid grid-cols-1 md:grid-cols-7 gap-4 w-full">
             <div v-for="(day, idx) in days" :key="day" class="border border-white/10 p-6 bg-neutral-900 flex flex-col items-center text-center">
                 <p class="text-[10px] font-black uppercase opacity-30 tracking-widest mb-6">{{ day }}</p>
-                <div v-if="weeklyPlan[idx]" class="space-y-4 flex flex-col items-center">
-                    <div class="w-24 h-24 overflow-hidden rounded-full border border-white/10">
-                        <!-- Farbe aktiviert -->
+                <div v-if="weeklyPlan[idx]" class="space-y-4 flex flex-col items-center w-full">
+                    <div class="w-24 h-24 overflow-hidden rounded-full border border-white/10 flex items-center justify-center">
                         <img :src="weeklyPlan[idx].imageUrl" class="w-full h-full object-cover">
                     </div>
                     <p class="text-xl font-black uppercase tracking-tighter leading-tight">{{ weeklyPlan[idx].name }}</p>
@@ -178,7 +178,6 @@
                             if (resp.error !== undefined) throw (resp);
                             isLoggedIn.value = true;
                             await setupDriveStructure();
-                            nextTick(() => lucide.createIcons());
                         },
                     });
                     lucide.createIcons();
@@ -232,9 +231,7 @@
                     body: formData
                 });
                 const result = await resp.json();
-                await gapi.client.drive.permissions.create({
-                    fileId: result.id, resource: { role: 'reader', type: 'anyone' }
-                });
+                await gapi.client.drive.permissions.create({ fileId: result.id, resource: { role: 'reader', type: 'anyone' } });
                 return `https://lh3.googleusercontent.com/u/0/d/${result.id}`;
             };
 
@@ -284,7 +281,6 @@
             const currentTotal = computed(() => form.value.ingredients.reduce((sum, ing) => sum + (parseFloat(ing.price) || 0), 0));
             const handleFileUpload = (e) => { const file = e.target.files[0]; if (!file) return; selectedFile.value = file; previewImage.value = URL.createObjectURL(file); };
             const closeModal = () => { modalOpen.value = false; previewImage.value = null; selectedFile.value = null; document.body.style.overflow = "auto"; };
-            
             const handleMouseMove = (e) => {
                 const card = e.currentTarget.querySelector('.recipe-card');
                 const rect = e.currentTarget.getBoundingClientRect();
