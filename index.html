@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>REZEPT.RAW | ULTIMATE</title>
+    <title>REZEPT.RAW | PRO</title>
     <link rel="manifest" href="manifest.json">
     <meta name="theme-color" content="#000000">
     
@@ -39,11 +39,9 @@
     <nav class="fixed top-0 w-full z-[100] px-6 py-6 flex justify-between items-center bg-black/80 backdrop-blur-xl border-b border-white/5">
         <h1 class="text-2xl font-black tracking-tighter uppercase italic">Recipe<span class="opacity-30">.Raw</span></h1>
         <div class="flex gap-4 items-center">
-            <!-- SYNC BUTTON -->
             <button v-if="isLoggedIn" @click="initDrive(); vibrate()" class="p-2 transition" :class="{'sync-icon text-white': syncing, 'opacity-50': !syncing}">
                 <i data-lucide="refresh-cw"></i>
             </button>
-            
             <button v-if="!isLoggedIn" @click="handleAuth(); vibrate()" class="text-[10px] font-black border border-white/20 px-3 py-1 uppercase tracking-widest">Connect</button>
             <template v-else>
                 <button @click="openWeekly(); vibrate()" class="p-2 opacity-50"><i data-lucide="calendar-days"></i></button>
@@ -52,7 +50,7 @@
         </div>
     </nav>
 
-    <!-- GRID (Immer geladen aus Cache oder Cloud) -->
+    <!-- GRID -->
     <main class="pt-28 pb-20 px-4 max-w-5xl mx-auto">
         <div class="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-3 gap-4" id="recipe-grid">
             <div v-for="recipe in recipes" :key="recipe.id" class="recipe-card-wrapper group cursor-pointer" @click="viewRecipe(recipe); vibrate()">
@@ -67,7 +65,7 @@
             </div>
         </div>
         <div v-if="recipes.length === 0" class="h-[60vh] flex flex-col items-center justify-center opacity-10 text-center">
-            <p class="uppercase font-black tracking-widest text-xs">Noch keine Rezepte<br>Klicke auf Connect oder +</p>
+            <p class="uppercase font-black tracking-widest text-xs">Noch keine Rezepte<br>Klicke auf Connect oder Sync</p>
         </div>
     </main>
 
@@ -95,7 +93,7 @@
         </div>
         <div class="fixed bottom-0 left-0 w-full p-6 glass-footer">
             <div class="max-w-2xl mx-auto flex justify-between items-center px-2">
-                <span class="text-[10px] opacity-30 uppercase font-black tracking-widest">Gesamtpreis</span>
+                <span class="text-[10px] opacity-30 uppercase font-black">Gesamtpreis</span>
                 <span class="text-3xl font-black tracking-tighter">{{ (currentRecipe.totalPrice || 0).toFixed(2) }} €</span>
             </div>
         </div>
@@ -204,15 +202,27 @@
                 syncing.value = true;
                 try {
                     const list = await gapi.client.drive.files.list({ q: "name = 'Rezepte' and mimeType = 'application/vnd.google-apps.folder' and trashed = false" });
-                    folderId.value = list.result.files[0]?.id || (await gapi.client.drive.files.create({ resource: { name: 'Rezepte', mimeType: 'application/vnd.google-apps.folder' } })).result.id;
-                    const data = await gapi.client.drive.files.list({ q: `name = 'data.json' and '${folderId.value}' in parents and trashed = false` });
-                    if(data.result.files.length > 0) {
-                        dataFileId.value = data.result.files[0].id;
+                    if(list.result.files.length > 0) folderId.value = list.result.files[0].id;
+                    else {
+                        const f = await gapi.client.drive.files.create({ resource: { name: 'Rezepte', mimeType: 'application/vnd.google-apps.folder' } });
+                        folderId.value = f.result.id;
+                    }
+                    
+                    const dataFileSearch = await gapi.client.drive.files.list({ q: `name = 'data.json' and '${folderId.value}' in parents and trashed = false` });
+                    if(dataFileSearch.result.files.length > 0) {
+                        dataFileId.value = dataFileSearch.result.files[0].id;
                         const res = await gapi.client.drive.files.get({ fileId: dataFileId.value, alt: 'media' });
-                        recipes.value = Array.isArray(res.result) ? res.result : [];
+                        let remoteData = res.result;
+                        if (typeof remoteData === 'string') remoteData = JSON.parse(remoteData);
+                        recipes.value = Array.isArray(remoteData) ? remoteData : [];
                         localStorage.setItem('raw_recipes_cache', JSON.stringify(recipes.value));
                     } else {
-                        dataFileId.value = (await gapi.client.drive.files.create({ resource: { name: 'data.json', parents: [folderId.value] }, media: { mimeType: 'application/json', body: '[]' } })).result.id;
+                        // Erstelle die Datei data.json explizit IM ORDNER Rezepte
+                        const res = await gapi.client.drive.files.create({ 
+                            resource: { name: 'data.json', parents: [folderId.value] }, 
+                            media: { mimeType: 'application/json', body: '[]' } 
+                        });
+                        dataFileId.value = res.result.id;
                     }
                 } catch(e) { console.error(e); }
                 syncing.value = false;
@@ -233,9 +243,9 @@
                 uploadLoading.value = true;
                 try {
                     if(selectedFile.value) {
-                        const meta = { name: `img_${Date.now()}.jpg`, parents: [folderId.value] };
+                        const metadata = { name: `img_${Date.now()}.jpg`, parents: [folderId.value] };
                         const formData = new FormData();
-                        formData.append('metadata', new Blob([JSON.stringify(meta)], { type: 'application/json' }));
+                        formData.append('metadata', new Blob([JSON.stringify(metadata)], { type: 'application/json' }));
                         formData.append('file', selectedFile.value);
                         const imgRes = await fetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id', {
                             method: 'POST', headers: { Authorization: `Bearer ${gapi.auth.getToken().access_token}` }, body: formData
@@ -256,9 +266,15 @@
 
                     localStorage.setItem('raw_recipes_cache', JSON.stringify(recipes.value));
 
-                    await gapi.client.request({ path: `/upload/drive/v3/files/${dataFileId.value}`, method: 'PATCH', params: { uploadType: 'media' }, body: JSON.stringify(recipes.value) });
+                    await gapi.client.request({ 
+                        path: `/upload/drive/v3/files/${dataFileId.value}`, 
+                        method: 'PATCH', 
+                        params: { uploadType: 'media' }, 
+                        body: JSON.stringify(recipes.value) 
+                    });
+                    
                     modalOpen.value = false; viewOpen.value = false; initScrollAnims();
-                } catch(e) { alert("Drive Error - Bitte auf das Sync-Icon oben klicken"); }
+                } catch(e) { alert("Drive Fehler - Bitte Sync drücken."); }
                 finally { uploadLoading.value = false; }
             };
 
