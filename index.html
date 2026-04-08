@@ -127,7 +127,6 @@
             <button @click="weeklyModal = false" class="bg-white text-black p-4 rounded-full"><i data-lucide="arrow-left"></i></button>
         </div>
 
-        <!-- Regenerate Button -->
         <button @click="generateNewWeeklyPlan" class="w-full border border-white/20 py-4 text-[10px] font-black uppercase tracking-[0.3em] mb-10 hover:bg-white hover:text-black transition">
             Neuen Plan würfeln
         </button>
@@ -182,9 +181,16 @@
                         callback: async (resp) => {
                             if (resp.error !== undefined) throw (resp);
                             isLoggedIn.value = true;
+                            localStorage.setItem('raw_recipe_logged_in', 'true');
                             await setupDriveStructure();
                         },
                     });
+
+                    // Auto-Login Check
+                    if (localStorage.getItem('raw_recipe_logged_in') === 'true') {
+                        tokenClient.requestAccessToken({ prompt: '' });
+                    }
+                    
                     lucide.createIcons();
                 });
             });
@@ -213,14 +219,22 @@
                 if (resp.result.files.length > 0) {
                     dataFileId.value = resp.result.files[0].id;
                     const content = await gapi.client.drive.files.get({ fileId: dataFileId.value, alt: 'media' });
-                    // Handle new storage format (Object instead of Array)
-                    const data = content.result;
+                    
+                    let data = content.result;
+                    // Robuste Migration: Falls Daten als String kommen, parsen
+                    if (typeof data === 'string') {
+                        try { data = JSON.parse(data); } catch(e) { console.error("Parse Error", e); }
+                    }
+
                     if (data && data.recipes) {
                         recipes.value = data.recipes;
                         weeklyPlan.value = data.weeklyPlan || [];
+                    } else if (Array.isArray(data)) {
+                        // Altes Format (Array) gefunden -> Migrieren
+                        recipes.value = data;
+                        weeklyPlan.value = [];
                     } else {
-                        // Migration for old data
-                        recipes.value = Array.isArray(data) ? data : [];
+                        recipes.value = [];
                         weeklyPlan.value = [];
                     }
                 } else {
@@ -311,7 +325,6 @@
             const currentTotal = computed(() => form.value.ingredients.reduce((sum, ing) => sum + (parseFloat(ing.price) || 0), 0));
             const handleFileUpload = (e) => { const file = e.target.files[0]; if (!file) return; selectedFile.value = file; previewImage.value = URL.createObjectURL(file); };
             const closeModal = () => { modalOpen.value = false; previewImage.value = null; selectedFile.value = null; document.body.style.overflow = "auto"; };
-            
             const handleMouseMove = (e) => {
                 const card = e.currentTarget.querySelector('.recipe-card');
                 const rect = e.currentTarget.getBoundingClientRect();
