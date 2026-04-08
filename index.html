@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>REZEPT.RAW | PRO</title>
+    <title>REZEPT.RAW | ULTIMATE</title>
     <link rel="manifest" href="manifest.json">
     <meta name="theme-color" content="#000000">
     
@@ -19,20 +19,16 @@
         @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;700;900&display=swap');
         [v-cloak] { display: none; }
         body { background-color: #000; color: #fff; font-family: 'Inter', sans-serif; overscroll-behavior-y: contain; }
-        
-        .recipe-card-wrapper { opacity: 0; transform: translateY(50px) rotateX(10deg); }
+        .recipe-card-wrapper { opacity: 0; transform: translateY(30px); }
         .recipe-card { background: #0d0d0d; border: 1px solid rgba(255,255,255,0.1); transform-style: preserve-3d; }
         .input-raw { background: #111 !important; border: 1px solid rgba(255,255,255,0.1) !important; padding: 1rem; width: 100%; outline: none; color: #fff; font-weight: 700; border-radius: 8px; }
         .input-raw:focus { border-color: #fff !important; }
-        
         .btn-main { background: #fff; color: #000; font-weight: 900; text-transform: uppercase; padding: 1.2rem; letter-spacing: 0.1em; cursor: pointer; text-align: center; border-radius: 8px; width: 100%; }
         .fixed-overlay { position: fixed; inset: 0; z-index: 200; background: #000; display: flex; flex-direction: column; }
         .no-scrollbar::-webkit-scrollbar { display: none; }
-        .glass-footer { background: rgba(0,0,0,0.8); backdrop-filter: blur(10px); border-top: 1px solid rgba(255,255,255,0.1); }
-
-        /* Loading Spinner */
-        .sync-indicator { animation: rotate 2s linear infinite; }
-        @keyframes rotate { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+        .glass-footer { background: rgba(0,0,0,0.9); backdrop-filter: blur(10px); border-top: 1px solid rgba(255,255,255,0.1); }
+        .sync-icon { animation: spin 2s linear infinite; }
+        @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
     </style>
 </head>
 <body>
@@ -43,8 +39,8 @@
     <nav class="fixed top-0 w-full z-[100] px-6 py-6 flex justify-between items-center bg-black/80 backdrop-blur-xl border-b border-white/5">
         <h1 class="text-2xl font-black tracking-tighter uppercase italic">Recipe<span class="opacity-30">.Raw</span></h1>
         <div class="flex gap-4 items-center">
-            <div v-if="syncing" class="sync-indicator text-white/20"><i data-lucide="refresh-cw" size="16"></i></div>
-            <button v-if="!isLoggedIn" @click="handleAuth(); vibrate()" class="text-[10px] font-black border border-white/20 px-4 py-2 uppercase tracking-widest">Connect</button>
+            <div v-if="syncing" class="sync-icon text-white/20"><i data-lucide="refresh-cw" size="16"></i></div>
+            <button v-if="!isLoggedIn" @click="handleAuth(); vibrate()" class="text-[10px] font-black border border-white/20 px-3 py-1 uppercase tracking-widest">Connect</button>
             <template v-else>
                 <button @click="openWeekly(); vibrate()" class="p-2 opacity-50"><i data-lucide="calendar-days"></i></button>
                 <button @click="openAdd(); vibrate()" class="bg-white text-black p-2 rounded-full"><i data-lucide="plus"></i></button>
@@ -52,22 +48,22 @@
         </div>
     </nav>
 
-    <!-- GRID -->
+    <!-- GRID (Immer geladen aus Cache oder Cloud) -->
     <main class="pt-28 pb-20 px-4 max-w-5xl mx-auto">
-        <div v-if="isLoggedIn" class="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-3 gap-4" id="recipe-grid">
+        <div class="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-3 gap-4" id="recipe-grid">
             <div v-for="recipe in recipes" :key="recipe.id" class="recipe-card-wrapper group cursor-pointer" @click="viewRecipe(recipe); vibrate()">
                 <div class="recipe-card relative aspect-[3/4] overflow-hidden rounded-2xl">
                     <img :src="recipe.imageUrl || 'https://via.placeholder.com/400x600?text=RAW'" class="w-full h-full object-cover">
                     <div class="absolute inset-0 bg-gradient-to-t from-black via-transparent to-transparent opacity-80"></div>
                     <div class="absolute bottom-0 p-4 w-full">
-                        <p class="text-[8px] font-black opacity-40 tracking-widest uppercase mb-1">{{ (recipe.totalPrice || 0).toFixed(2) }} €</p>
+                        <p class="text-[8px] font-black opacity-40 uppercase mb-1">{{ (recipe.totalPrice || 0).toFixed(2) }} €</p>
                         <h3 class="text-sm font-black uppercase leading-tight">{{ recipe.name }}</h3>
                     </div>
                 </div>
             </div>
         </div>
-        <div v-else class="h-[60vh] flex flex-col items-center justify-center opacity-10">
-            <p class="uppercase font-black tracking-widest text-xs">Waiting for Connection...</p>
+        <div v-if="recipes.length === 0" class="h-[60vh] flex flex-col items-center justify-center opacity-10 text-center">
+            <p class="uppercase font-black tracking-widest text-xs">Noch keine Rezepte<br>Klicke auf Connect oder +</p>
         </div>
     </main>
 
@@ -83,9 +79,9 @@
             <h1 class="text-4xl font-black uppercase tracking-tighter">{{ currentRecipe.name }}</h1>
             <div class="space-y-4">
                 <h4 class="text-[10px] font-black opacity-30 tracking-[0.4em] uppercase">Zutaten</h4>
-                <div v-for="ing in currentRecipe.ingredients" class="flex justify-between border-b border-white/5 py-3">
-                    <span class="font-bold uppercase text-sm">{{ ing.name }}</span>
-                    <span class="font-mono text-white/50">{{ (ing.price || 0).toFixed(2) }} €</span>
+                <div v-for="ing in currentRecipe.ingredients" class="flex justify-between border-b border-white/5 py-3 font-bold uppercase text-sm">
+                    <span>{{ ing.name }}</span>
+                    <span class="opacity-50">{{ (ing.price || 0).toFixed(2) }} €</span>
                 </div>
             </div>
             <div class="space-y-4">
@@ -95,7 +91,7 @@
         </div>
         <div class="fixed bottom-0 left-0 w-full p-6 glass-footer">
             <div class="max-w-2xl mx-auto flex justify-between items-center px-2">
-                <span class="text-[10px] opacity-30 uppercase font-black">Gesamtpreis</span>
+                <span class="text-[10px] opacity-30 uppercase font-black tracking-widest">Gesamtpreis</span>
                 <span class="text-3xl font-black tracking-tighter">{{ (currentRecipe.totalPrice || 0).toFixed(2) }} €</span>
             </div>
         </div>
@@ -104,12 +100,12 @@
     <!-- EDIT MODAL -->
     <div v-if="modalOpen" class="fixed-overlay no-scrollbar overflow-y-auto">
         <header class="sticky top-0 bg-black p-6 border-b border-white/10 flex justify-between items-center z-10">
-            <h2 class="text-xs font-black uppercase">{{ isEditing ? 'Bearbeiten' : 'Neu' }}</h2>
+            <h2 class="text-xs font-black uppercase">{{ isEditing ? 'Edit' : 'Neu' }}</h2>
             <button @click="modalOpen = false; vibrate()" class="p-2"><i data-lucide="x"></i></button>
         </header>
         <div class="p-6 space-y-8 max-w-2xl mx-auto w-full pb-32">
             <div @click="$refs.fileInput.click(); vibrate()" class="aspect-video bg-neutral-900 border border-white/5 flex items-center justify-center overflow-hidden rounded-2xl relative">
-                <img v-if="previewImage || form.imageUrl" :src="previewImage || form.imageUrl" class="absolute inset-0 w-full h-full object-cover opacity-50">
+                <img v-if="previewImage || form.imageUrl" :src="previewImage || form.imageUrl" class="absolute inset-0 w-full h-full object-cover opacity-60">
                 <i data-lucide="camera" class="opacity-20"></i>
                 <input type="file" ref="fileInput" class="hidden" @change="handleFile" accept="image/*">
             </div>
@@ -125,13 +121,12 @@
             <textarea v-model="form.instructions" placeholder="ANLEITUNG..." class="input-raw h-48 resize-none"></textarea>
             <div class="fixed bottom-0 left-0 w-full p-6 bg-black border-t border-white/5 flex flex-col gap-4">
                 <div class="flex justify-between items-end px-2 font-black">
-                    <span class="text-[10px] opacity-30 uppercase">Vorschau Gesamt</span>
+                    <span class="text-[10px] opacity-30 uppercase tracking-widest">Summe</span>
                     <span class="text-3xl tracking-tighter">{{ editTotal.toFixed(2) }} €</span>
                 </div>
                 <button @click="save(); vibrate()" :disabled="uploadLoading" class="btn-main">
                     {{ uploadLoading ? 'Warten...' : 'Speichern' }}
                 </button>
-                <button v-if="isEditing" @click="deleteRecipe(); vibrate()" class="text-red-500 font-black text-[10px] uppercase opacity-50">Löschen</button>
             </div>
         </div>
     </div>
@@ -140,7 +135,7 @@
     <div v-if="weeklyOpen" class="fixed-overlay p-6 overflow-y-auto items-center">
         <div class="w-full max-w-md">
             <header class="flex justify-between items-center mb-10">
-                <h2 class="text-4xl font-black italic uppercase">Wochenplan</h2>
+                <h2 class="text-4xl font-black italic tracking-tighter uppercase">Wochenplan</h2>
                 <button @click="weeklyOpen = false; vibrate()" class="bg-white text-black p-4 rounded-full"><i data-lucide="arrow-left"></i></button>
             </header>
             <div class="space-y-4 pb-20">
@@ -148,9 +143,9 @@
                     <p class="text-[10px] font-black opacity-30 uppercase tracking-[0.3em] mb-4">{{ day }}</p>
                     <div v-if="weekPlan[idx]" class="w-full space-y-4">
                         <img :src="weekPlan[idx].imageUrl" class="w-32 h-32 rounded-full mx-auto object-cover border-2 border-white/10">
-                        <p class="font-black uppercase text-xl leading-none px-4">{{ weekPlan[idx].name }}</p>
+                        <p class="font-black uppercase text-xl leading-none">{{ weekPlan[idx].name }}</p>
                     </div>
-                    <div v-else class="py-10 opacity-10">---</div>
+                    <div v-else class="py-10 opacity-10 font-black italic">---</div>
                 </div>
             </div>
         </div>
@@ -165,7 +160,7 @@
 
     createApp({
         setup() {
-            const recipes = ref([]);
+            const recipes = ref(JSON.parse(localStorage.getItem('raw_recipes_cache') || '[]'));
             const isLoggedIn = ref(false);
             const syncing = ref(false);
             const modalOpen = ref(false);
@@ -184,24 +179,17 @@
 
             let tokenClient;
 
-            const vibrate = () => { if (window.navigator && window.navigator.vibrate) window.navigator.vibrate(20); };
+            const vibrate = () => { if (window.navigator?.vibrate) window.navigator.vibrate(20); };
 
             onMounted(() => {
                 gsap.registerPlugin(ScrollTrigger);
+                initScrollAnims();
                 gapi.load('client', async () => {
                     await gapi.client.init({ apiKey: API_KEY, discoveryDocs: ["https://www.googleapis.com/discovery/v1/apis/drive/v3/rest"] });
                     tokenClient = google.accounts.oauth2.initTokenClient({
                         client_id: CLIENT_ID, scope: 'https://www.googleapis.com/auth/drive.file',
-                        callback: async (res) => { 
-                            if(!res.error) { 
-                                isLoggedIn.value=true; 
-                                localStorage.setItem('raw_connected', 'true');
-                                await initDrive(); 
-                            } 
-                        }
+                        callback: async (res) => { if(!res.error) { isLoggedIn.value=true; await initDrive(); } }
                     });
-                    
-                    // Auto Reconnect
                     if (localStorage.getItem('raw_connected') === 'true') {
                         tokenClient.requestAccessToken({ prompt: '' });
                     }
@@ -210,33 +198,29 @@
 
             const initDrive = async () => {
                 syncing.value = true;
-                const list = await gapi.client.drive.files.list({ q: "name = 'Rezepte' and mimeType = 'application/vnd.google-apps.folder' and trashed = false" });
-                if(list.result.files.length > 0) folderId.value = list.result.files[0].id;
-                else {
-                    const f = await gapi.client.drive.files.create({ resource: { name: 'Rezepte', mimeType: 'application/vnd.google-apps.folder' } });
-                    folderId.value = f.result.id;
-                }
-                const data = await gapi.client.drive.files.list({ q: `name = 'data.json' and '${folderId.value}' in parents and trashed = false` });
-                if(data.result.files.length > 0) {
-                    dataFileId.value = data.result.files[0].id;
-                    const res = await gapi.client.drive.files.get({ fileId: dataFileId.value, alt: 'media' });
-                    recipes.value = res.result || [];
-                    initScrollAnims();
-                } else {
-                    const res = await gapi.client.drive.files.create({ resource: { name: 'data.json', parents: [folderId.value] }, media: { mimeType: 'application/json', body: '[]' } });
-                    dataFileId.value = res.result.id;
-                }
+                localStorage.setItem('raw_connected', 'true');
+                try {
+                    const list = await gapi.client.drive.files.list({ q: "name = 'Rezepte' and mimeType = 'application/vnd.google-apps.folder' and trashed = false" });
+                    folderId.value = list.result.files[0]?.id || (await gapi.client.drive.files.create({ resource: { name: 'Rezepte', mimeType: 'application/vnd.google-apps.folder' } })).result.id;
+                    const data = await gapi.client.drive.files.list({ q: `name = 'data.json' and '${folderId.value}' in parents and trashed = false` });
+                    if(data.result.files.length > 0) {
+                        dataFileId.value = data.result.files[0].id;
+                        const res = await gapi.client.drive.files.get({ fileId: dataFileId.value, alt: 'media' });
+                        recipes.value = Array.isArray(res.result) ? res.result : [];
+                        localStorage.setItem('raw_recipes_cache', JSON.stringify(recipes.value));
+                    } else {
+                        dataFileId.value = (await gapi.client.drive.files.create({ resource: { name: 'data.json', parents: [folderId.value] }, media: { mimeType: 'application/json', body: '[]' } })).result.id;
+                    }
+                } catch(e) { console.error(e); }
                 syncing.value = false;
+                initScrollAnims();
                 nextTick(() => lucide.createIcons());
             };
 
             const initScrollAnims = () => {
                 nextTick(() => {
-                    gsap.utils.toArray(".recipe-card-wrapper").forEach((card, i) => {
-                        gsap.to(card, {
-                            scrollTrigger: { trigger: card, start: "top 95%" },
-                            opacity: 1, y: 0, rotateX: 0, duration: 0.8, ease: "power4.out"
-                        });
+                    gsap.utils.toArray(".recipe-card-wrapper").forEach((card) => {
+                        gsap.to(card, { scrollTrigger: { trigger: card, start: "top 95%" }, opacity: 1, y: 0, duration: 0.6 });
                     });
                 });
             };
@@ -267,29 +251,27 @@
                         recipes.value.unshift(recipe);
                     }
 
-                    await gapi.client.request({
-                        path: `/upload/drive/v3/files/${dataFileId.value}`,
-                        method: 'PATCH', params: { uploadType: 'media' }, body: JSON.stringify(recipes.value)
-                    });
-                    modalOpen.value = false;
-                    viewOpen.value = false;
-                    initScrollAnims();
-                } catch(e) { alert("Drive Error: " + e.message); }
+                    // Sofort in Cache speichern
+                    localStorage.setItem('raw_recipes_cache', JSON.stringify(recipes.value));
+
+                    await gapi.client.request({ path: `/upload/drive/v3/files/${dataFileId.value}`, method: 'PATCH', params: { uploadType: 'media' }, body: JSON.stringify(recipes.value) });
+                    modalOpen.value = false; viewOpen.value = false; initScrollAnims();
+                } catch(e) { alert("Drive Error - Bitte Connect klicken"); }
                 finally { uploadLoading.value = false; }
             };
 
             const editTotal = computed(() => form.value.ingredients.reduce((s, i) => s + (Number(i.price) || 0), 0));
 
             return {
-                recipes, isLoggedIn, modalOpen, viewOpen, weeklyOpen, isEditing, form, days, weekPlan, previewImage, uploadLoading, editTotal, currentRecipe, vibrate, syncing,
+                recipes, isLoggedIn, syncing, modalOpen, viewOpen, weeklyOpen, isEditing, form, days, weekPlan, previewImage, uploadLoading, editTotal, currentRecipe, vibrate,
                 handleAuth: () => tokenClient.requestAccessToken(),
                 openAdd: () => { isEditing.value=false; form.value={id:'', name:'', imageUrl:'', ingredients:[{name:'', price:''}], instructions:''}; previewImage.value=null; modalOpen.value=true; nextTick(()=>lucide.createIcons()); },
                 viewRecipe: (r) => { currentRecipe.value = r; viewOpen.value = true; nextTick(()=>lucide.createIcons()); },
                 editRecipe: () => { isEditing.value=true; form.value=JSON.parse(JSON.stringify(currentRecipe.value)); previewImage.value=null; modalOpen.value=true; nextTick(()=>lucide.createIcons()); },
-                handleFile: (e) => { selectedFile.value = e.target.files[0]; previewImage.value = URL.createObjectURL(selectedFile.value); },
+                handleFile: (e) => { selectedFile.value = e.target.files[0]; if(selectedFile.value) previewImage.value = URL.createObjectURL(selectedFile.value); },
                 openWeekly: () => { weekPlan.value = [...recipes.value].sort(()=>0.5-Math.random()).slice(0,7); weeklyOpen.value=true; nextTick(()=>lucide.createIcons()); },
-                deleteRecipe: async () => { if(confirm("Löschen?")) { recipes.value = recipes.value.filter(r => r.id !== form.value.id); await gapi.client.request({path: `/upload/drive/v3/files/${dataFileId.value}`, method: 'PATCH', params: { uploadType: 'media' }, body: JSON.stringify(recipes.value)}); modalOpen.value = false; viewOpen.value = false; } },
-                save
+                save,
+                deleteRecipe: async () => { if(confirm("Löschen?")) { recipes.value = recipes.value.filter(r => r.id !== form.value.id); localStorage.setItem('raw_recipes_cache', JSON.stringify(recipes.value)); await gapi.client.request({path: `/upload/drive/v3/files/${dataFileId.value}`, method: 'PATCH', params: { uploadType: 'media' }, body: JSON.stringify(recipes.value)}); modalOpen.value = false; viewOpen.value = false; } }
             }
         }
     }).mount('#app');
