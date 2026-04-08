@@ -106,7 +106,7 @@
             <button @click="modalOpen = false; vibrate()" class="p-2"><i data-lucide="x"></i></button>
         </header>
         <div class="p-6 space-y-8 max-w-2xl mx-auto w-full pb-32">
-            <div @click="$refs.fileInput.click(); vibrate()" class="aspect-video bg-neutral-900 border border-white/5 flex items-center justify-center overflow-hidden rounded-2xl relative">
+            <div @click="$refs.fileInput.click(); vibrate()" class="aspect-video bg-neutral-900 border border-white/5 flex items-center justify-center overflow-hidden rounded-2xl relative cursor-pointer group">
                 <img v-if="previewImage || form.imageUrl" :src="previewImage || form.imageUrl" class="absolute inset-0 w-full h-full object-cover opacity-60">
                 <i data-lucide="camera" class="opacity-20"></i>
                 <input type="file" ref="fileInput" class="hidden" @change="handleFile" accept="image/*">
@@ -123,7 +123,7 @@
             <textarea v-model="form.instructions" placeholder="ANLEITUNG..." class="input-raw h-48 resize-none"></textarea>
             <div class="fixed bottom-0 left-0 w-full p-6 bg-black border-t border-white/5 flex flex-col gap-4">
                 <div class="flex justify-between items-end px-2 font-black">
-                    <span class="text-[10px] opacity-30 uppercase">Summe</span>
+                    <span class="text-[10px] opacity-30 uppercase tracking-widest">Summe</span>
                     <span class="text-3xl tracking-tighter">{{ editTotal.toFixed(2) }} €</span>
                 </div>
                 <button @click="save(); vibrate()" :disabled="uploadLoading" class="btn-main">
@@ -145,7 +145,7 @@
                     <p class="text-[10px] font-black opacity-30 uppercase tracking-[0.3em] mb-4">{{ day }}</p>
                     <div v-if="weekPlan[idx]" class="w-full space-y-4">
                         <img :src="weekPlan[idx].imageUrl" class="w-32 h-32 rounded-full mx-auto object-cover border-2 border-white/10">
-                        <p class="font-black uppercase text-xl leading-none">{{ weekPlan[idx].name }}</p>
+                        <p class="font-black uppercase text-xl leading-none px-4">{{ weekPlan[idx].name }}</p>
                     </div>
                     <div v-else class="py-10 opacity-10 font-black italic">---</div>
                 </div>
@@ -245,12 +245,16 @@
                             fields: 'id'
                         });
                         const imgId = metaRes.result.id;
-                        await gapi.client.request({
-                            path: `/upload/drive/v3/files/${imgId}`,
-                            method: 'PATCH', params: { uploadType: 'media' }, body: selectedFile.value
+                        
+                        // ECHTER BINÄR-UPLOAD
+                        const buffer = await selectedFile.value.arrayBuffer();
+                        await fetch(`https://www.googleapis.com/upload/drive/v3/files/${imgId}?uploadType=media`, {
+                            method: 'PATCH',
+                            headers: { Authorization: `Bearer ${gapi.auth.getToken().access_token}` },
+                            body: buffer
                         });
+                        
                         await gapi.client.drive.permissions.create({ fileId: imgId, resource: { role: 'reader', type: 'anyone' } });
-                        // BESSERER LINK: Thumbnail-Schnittstelle ist viel stabiler für PWAs
                         form.value.imageUrl = `https://drive.google.com/thumbnail?id=${imgId}&sz=w1000`;
                     }
 
@@ -265,13 +269,9 @@
 
                     localStorage.setItem('raw_recipes_cache', JSON.stringify(recipes.value));
 
-                    await gapi.client.request({ 
-                        path: `/upload/drive/v3/files/${dataFileId.value}`, 
-                        method: 'PATCH', params: { uploadType: 'media' }, body: JSON.stringify(recipes.value) 
-                    });
-                    
+                    await gapi.client.request({ path: `/upload/drive/v3/files/${dataFileId.value}`, method: 'PATCH', params: { uploadType: 'media' }, body: JSON.stringify(recipes.value) });
                     modalOpen.value = false; viewOpen.value = false; initScrollAnims();
-                } catch(e) { alert("Drive Sync Error. Bitte erneut verbinden."); }
+                } catch(e) { alert("Drive Sync Error. Bitte Connect klicken."); }
                 finally { uploadLoading.value = false; }
             };
 
