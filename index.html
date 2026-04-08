@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>REZEPT.RAW | Drive Pro</title>
+    <title>REZEPT.RAW | Drive Ultimate</title>
     <link rel="manifest" href="manifest.json">
     
     <script src="https://cdn.tailwindcss.com"></script>
@@ -32,7 +32,6 @@
 
 <div id="app" v-cloak>
     
-    <!-- NAVBAR -->
     <nav class="fixed top-0 w-full z-[100] px-6 py-6 flex justify-between items-center bg-black border-b border-white/5">
         <h1 class="text-2xl font-black tracking-tighter uppercase leading-none italic">Rezept<span class="opacity-30">.Raw</span></h1>
         <div class="flex gap-4 items-center">
@@ -45,7 +44,6 @@
         </div>
     </nav>
 
-    <!-- MAIN GRID -->
     <main class="pt-24 pb-12 px-4 max-w-6xl mx-auto">
         <div v-if="!isLoggedIn" class="text-center py-20 opacity-20 uppercase font-black tracking-widest text-xs">Bitte mit Google verbinden</div>
         <div v-else class="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-10">
@@ -55,8 +53,7 @@
                  @mouseleave="handleMouseLeave($event)"
                  @click="viewRecipe(recipe)">
                 <div class="recipe-card relative aspect-[3/4] overflow-hidden">
-                    <img :src="recipe.imageUrl || 'https://via.placeholder.com/600x800?text=RAW'" 
-                         class="w-full h-full object-cover transition-all duration-700 pointer-events-none">
+                    <img :src="recipe.imageUrl || 'https://via.placeholder.com/600x800?text=RAW'" class="w-full h-full object-cover transition-all duration-700 pointer-events-none">
                     <div class="absolute inset-0 bg-gradient-to-t from-black via-transparent to-transparent opacity-80 pointer-events-none"></div>
                     <div class="absolute bottom-0 p-4 sm:p-8 pointer-events-none">
                         <p class="text-[8px] sm:text-[10px] font-black opacity-30 tracking-[0.3em] mb-1 sm:mb-2 uppercase">{{ recipe.totalPrice.toFixed(2) }} EUR</p>
@@ -67,7 +64,6 @@
         </div>
     </main>
 
-    <!-- MODAL -->
     <div v-if="modalOpen" class="fixed-overlay no-scrollbar overflow-y-auto">
         <div class="sticky top-0 z-[210] bg-black px-6 py-6 border-b border-white/10 flex justify-between items-center">
             <h2 class="text-xs font-black uppercase tracking-[0.4em]">{{ isEditing ? 'Rezept bearbeiten' : 'Neues Rezept' }}</h2>
@@ -120,10 +116,9 @@
         </div>
     </div>
 
-    <!-- WEEKLY PLAN -->
     <div v-if="weeklyModal" class="fixed-overlay p-6 overflow-y-auto no-scrollbar">
         <div class="flex justify-between items-center mb-12">
-            <h2 class="text-3xl font-black italic tracking-tighter uppercase">Wochenplan</h2>
+            <h2 class="text-3xl font-black italic tracking-tighter uppercase leading-none">Wochenplan</h2>
             <button @click="weeklyModal = false" class="bg-white text-black p-4 rounded-full"><i data-lucide="arrow-left"></i></button>
         </div>
         <button @click="generateNewWeeklyPlan" class="w-full border border-white/20 py-4 text-[10px] font-black uppercase tracking-[0.3em] mb-10 hover:bg-white hover:text-black transition">
@@ -178,13 +173,12 @@
                     tokenClient = google.accounts.oauth2.initTokenClient({
                         client_id: CLIENT_ID, scope: SCOPES,
                         callback: async (resp) => {
-                            if (resp.error !== undefined) throw (resp);
+                            if (resp.error) return;
                             isLoggedIn.value = true;
                             localStorage.setItem('raw_recipe_logged_in', 'true');
-                            await setupDriveStructure();
+                            await setupDrive();
                         },
                     });
-
                     if (localStorage.getItem('raw_recipe_logged_in') === 'true') {
                         tokenClient.requestAccessToken({ prompt: '' });
                     }
@@ -192,26 +186,23 @@
                 });
             });
 
-            const handleAuth = () => tokenClient.requestAccessToken();
-
-            const setupDriveStructure = async () => {
-                // 1. Ordner suchen oder erstellen
-                const resp = await gapi.client.drive.files.list({
-                    q: "name = 'Rezepte' and mimeType = 'application/vnd.google-apps.folder' and trashed = false",
+            const setupDrive = async () => {
+                // 1. Ordner "Rezepte" finden oder erstellen
+                const folderResp = await gapi.client.drive.files.list({
+                    q: "name = 'Rezepte' and mimeType = 'application/vnd.google-apps.folder' and trashed = false"
                 });
-                
-                if (resp.result.files.length > 0) {
-                    folderId.value = resp.result.files[0].id;
+                if (folderResp.result.files.length > 0) {
+                    folderId.value = folderResp.result.files[0].id;
                 } else {
                     const folder = await gapi.client.drive.files.create({
                         resource: { name: 'Rezepte', mimeType: 'application/vnd.google-apps.folder' }
                     });
                     folderId.value = folder.result.id;
                 }
-                
-                // 2. Datei IM ORDNER suchen
+
+                // 2. Datei "rezepte_daten.json" NUR in diesem Ordner suchen
                 const fileResp = await gapi.client.drive.files.list({
-                    q: `name = 'rezepte_daten.json' and '${folderId.value}' in parents and trashed = false`,
+                    q: `name = 'rezepte_daten.json' and '${folderId.value}' in parents and trashed = false`
                 });
 
                 if (fileResp.result.files.length > 0) {
@@ -219,20 +210,17 @@
                     const content = await gapi.client.drive.files.get({ fileId: dataFileId.value, alt: 'media' });
                     let data = content.result;
                     if (typeof data === 'string') try { data = JSON.parse(data); } catch(e) {}
-                    
                     if (data && data.recipes) {
                         recipes.value = data.recipes;
                         weeklyPlan.value = data.weeklyPlan || [];
                     } else if (Array.isArray(data)) {
                         recipes.value = data;
-                        weeklyPlan.value = [];
                     }
                 } else {
-                    // Datei erstellen FALLS NICHT VORHANDEN
-                    const initialData = { recipes: [], weeklyPlan: [] };
+                    const initial = { recipes: [], weeklyPlan: [] };
                     const file = await gapi.client.drive.files.create({
                         resource: { name: 'rezepte_daten.json', parents: [folderId.value] },
-                        media: { mimeType: 'application/json', body: JSON.stringify(initialData) }
+                        media: { mimeType: 'application/json', body: JSON.stringify(initial) }
                     });
                     dataFileId.value = file.result.id;
                 }
@@ -242,18 +230,17 @@
             const syncData = async () => {
                 if (!dataFileId.value) return;
                 syncing.value = true;
-                const fullData = { recipes: recipes.value, weeklyPlan: weeklyPlan.value };
-                try {
-                    await fetch(`https://www.googleapis.com/upload/drive/v3/files/${dataFileId.value}?uploadType=media`, {
-                        method: 'PATCH',
-                        headers: new Headers({ 'Authorization': 'Bearer ' + gapi.auth.getToken().access_token, 'Content-Type': 'application/json' }),
-                        body: JSON.stringify(fullData)
-                    });
-                } finally { syncing.value = false; }
+                const body = JSON.stringify({ recipes: recipes.value, weeklyPlan: weeklyPlan.value });
+                await fetch(`https://www.googleapis.com/upload/drive/v3/files/${dataFileId.value}?uploadType=media`, {
+                    method: 'PATCH',
+                    headers: new Headers({ 'Authorization': 'Bearer ' + gapi.auth.getToken().access_token, 'Content-Type': 'application/json' }),
+                    body: body
+                });
+                syncing.value = false;
             };
 
             const uploadImage = async (file) => {
-                const metadata = { name: `img_${Date.now()}`, parents: [folderId.value] };
+                const metadata = { name: `img_${Date.now()}.jpg`, parents: [folderId.value] };
                 const formData = new FormData();
                 formData.append('metadata', new Blob([JSON.stringify(metadata)], { type: 'application/json' }));
                 formData.append('file', file);
@@ -262,66 +249,57 @@
                     headers: new Headers({ 'Authorization': 'Bearer ' + gapi.auth.getToken().access_token }),
                     body: formData
                 });
-                const result = await resp.json();
-                await gapi.client.drive.permissions.create({ fileId: result.id, resource: { role: 'reader', type: 'anyone' } });
-                return `https://lh3.googleusercontent.com/u/0/d/${result.id}`;
+                const res = await resp.json();
+                await gapi.client.drive.permissions.create({ fileId: res.id, resource: { role: 'reader', type: 'anyone' } });
+                return `https://lh3.googleusercontent.com/u/0/d/${res.id}`;
             };
 
             const saveRecipe = async () => {
-                if (!form.value.name) return alert("Name eingeben.");
+                if (!form.value.name) return alert("Name eingeben!");
                 uploadLoading.value = true;
                 try {
-                    let finalImageUrl = form.value.imageUrl;
-                    if (selectedFile.value) finalImageUrl = await uploadImage(selectedFile.value);
-                    const recipeData = {
+                    let imgUrl = form.value.imageUrl;
+                    if (selectedFile.value) imgUrl = await uploadImage(selectedFile.value);
+                    const newRecipe = {
                         id: isEditing.value ? editingId.value : Date.now().toString(),
                         name: form.value.name.toUpperCase(),
-                        imageUrl: finalImageUrl,
+                        imageUrl: imgUrl,
                         ingredients: JSON.parse(JSON.stringify(form.value.ingredients)),
                         instructions: form.value.instructions,
                         totalPrice: currentTotal.value
                     };
                     if (isEditing.value) {
                         const idx = recipes.value.findIndex(r => r.id === editingId.value);
-                        recipes.value[idx] = recipeData;
+                        recipes.value[idx] = newRecipe;
                     } else {
-                        recipes.value.unshift(recipeData);
+                        recipes.value.unshift(newRecipe);
                     }
                     await syncData();
                     closeModal();
-                } finally { uploadLoading.value = false; }
+                } catch(e) { alert("Fehler beim Speichern."); }
+                finally { uploadLoading.value = false; }
             };
 
-            const deleteRecipe = async () => {
-                if(confirm("Löschen?")) {
-                    recipes.value = recipes.value.filter(r => r.id !== editingId.value);
-                    await syncData();
-                    closeModal();
-                }
-            };
-
-            const currentTotal = computed(() => form.value.ingredients.reduce((sum, ing) => sum + (parseFloat(ing.price) || 0), 0));
-            const handleFileUpload = (e) => { const file = e.target.files[0]; if (!file) return; selectedFile.value = file; previewImage.value = URL.createObjectURL(file); };
+            const currentTotal = computed(() => form.value.ingredients.reduce((s, i) => s + (parseFloat(i.price) || 0), 0));
             const closeModal = () => { modalOpen.value = false; previewImage.value = null; selectedFile.value = null; document.body.style.overflow = "auto"; };
             const handleMouseMove = (e) => {
                 const card = e.currentTarget.querySelector('.recipe-card');
-                const rect = e.currentTarget.getBoundingClientRect();
-                const x = (e.clientX - rect.left - rect.width/2) / 10;
-                const y = (e.clientY - rect.top - rect.height/2) / 10;
-                gsap.to(card, { rotationY: x, rotationX: -y, scale: 1.05, duration: 0.3 });
+                const r = e.currentTarget.getBoundingClientRect();
+                gsap.to(card, { rotationY: (e.clientX - r.left - r.width/2)/10, rotationX: -(e.clientY - r.top - r.height/2)/10, scale: 1.05, duration: 0.3 });
             };
-            const handleMouseLeave = (e) => gsap.to(e.currentTarget.querySelector('.recipe-card'), { rotationY: 0, rotationX: 0, scale: 1, duration: 0.5 });
 
             return {
-                recipes, modalOpen, form, currentTotal, saveRecipe, handleFileUpload, previewImage, 
-                uploadLoading, syncing, closeModal, isLoggedIn, handleAuth, deleteRecipe,
+                recipes, modalOpen, form, currentTotal, saveRecipe, uploadLoading, syncing, closeModal, isLoggedIn, 
+                handleAuth: () => tokenClient.requestAccessToken(),
+                handleFileUpload: (e) => { selectedFile.value = e.target.files[0]; if(selectedFile.value) previewImage.value = URL.createObjectURL(selectedFile.value); },
+                deleteRecipe: async () => { if(confirm("Löschen?")) { recipes.value = recipes.value.filter(r => r.id !== editingId.value); await syncData(); closeModal(); } },
                 viewRecipe: (r) => { isEditing.value = true; editingId.value = r.id; form.value = JSON.parse(JSON.stringify(r)); modalOpen.value = true; document.body.style.overflow = "hidden"; nextTick(() => lucide.createIcons()); },
                 openAddModal: () => { isEditing.value = false; form.value = { name: '', imageUrl: '', ingredients: [{ name: '', price: '' }], instructions: '' }; modalOpen.value = true; document.body.style.overflow = "hidden"; nextTick(() => lucide.createIcons()); },
                 addIng: () => form.value.ingredients.push({ name: '', price: '' }),
                 removeIng: (i) => form.value.ingredients.splice(i, 1),
-                generateNewWeeklyPlan: async () => { weeklyPlan.value = [...recipes.value].sort(() => 0.5 - Math.random()).slice(0, 7); await syncData(); },
+                generateNewWeeklyPlan: async () => { if(recipes.value.length < 1) return; weeklyPlan.value = [...recipes.value].sort(() => 0.5 - Math.random()).slice(0, 7); await syncData(); },
                 openWeeklyPlan: () => { weeklyModal.value = true; nextTick(() => lucide.createIcons()); },
-                weeklyModal, weeklyPlan, days, handleMouseMove, handleMouseLeave
+                weeklyModal, weeklyPlan, days, handleMouseMove, handleMouseLeave: (e) => gsap.to(e.currentTarget.querySelector('.recipe-card'), { rotationY: 0, rotationX: 0, scale: 1, duration: 0.5 })
             }
         }
     }).mount('#app');
