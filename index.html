@@ -57,7 +57,7 @@
         <!-- FILTER BAR -->
         <div v-if="isLoggedIn" class="flex gap-2 overflow-x-auto no-scrollbar pb-2">
             <button v-for="t in ['Alle', 'Frühstück', 'Mittag', 'Abend', 'Snack']" 
-                    @click="activeFilter = t; vibrate()"
+                    @click="setFilter(t); vibrate()"
                     :class="['text-[10px] font-black px-4 py-1 border border-white/10 uppercase tracking-widest whitespace-nowrap rounded-full transition-all', activeFilter === t ? 'active-filter' : 'opacity-40']">
                 {{ t }}
             </button>
@@ -128,7 +128,7 @@
             <button @click="modalOpen = false; vibrate()" class="p-2"><i data-lucide="x"></i></button>
         </header>
         <div class="p-6 space-y-8 max-w-2xl mx-auto w-full pb-32">
-            <div @click="$refs.fileInput.click(); vibrate()" class="aspect-video bg-neutral-900 border border-white/5 flex items-center justify-center overflow-hidden rounded-2xl relative">
+            <div @click="$refs.fileInput.click(); vibrate()" class="aspect-video bg-neutral-900 border border-white/5 flex items-center justify-center overflow-hidden rounded-2xl relative cursor-pointer group">
                 <img v-if="previewImage || form.imageUrl" :src="previewImage || form.imageUrl" class="absolute inset-0 w-full h-full object-cover opacity-60">
                 <i data-lucide="camera" class="opacity-20"></i>
                 <input type="file" ref="fileInput" class="hidden" @change="handleFile" accept="image/*">
@@ -185,7 +185,10 @@
             </div>
 
             <div class="space-y-4 pb-10">
-                <div v-for="(day, idx) in days" :key="day" class="flex flex-col items-center bg-neutral-900 p-6 rounded-[2.5rem] border border-white/5 text-center">
+                <!-- Clickable slots to exchange manually -->
+                <div v-for="(day, idx) in days" :key="day" 
+                     @click="swapSlot(activeWeeklyTab, idx); vibrate()"
+                     class="flex flex-col items-center bg-neutral-900 p-6 rounded-[2.5rem] border border-white/5 text-center cursor-pointer active:scale-95 transition-transform">
                     <p class="text-[10px] font-black opacity-30 uppercase tracking-[0.3em] mb-4">{{ day }}</p>
                     <div v-if="plans[activeWeeklyTab][idx]" class="w-full space-y-4">
                         <img :src="plans[activeWeeklyTab][idx].imageUrl" class="w-32 h-32 rounded-full mx-auto object-cover border-2 border-white/10">
@@ -224,7 +227,6 @@
             const folderId = ref(null);
             const dataFileId = ref(null);
             const currentRecipe = ref(null);
-            const weekPlan = ref([]);
             const form = ref({ id:'', name:'', imageUrl:'', ingredients:[], instructions:'', tags: [] });
             const days = ["Mo", "Di", "Mi", "Do", "Fr", "Sa", "So"];
 
@@ -236,6 +238,15 @@
                 if (activeFilter.value === 'Alle') return recipes.value;
                 return recipes.value.filter(r => r.tags && r.tags.includes(activeFilter.value));
             });
+
+            // FIXED: Automatically refresh GSAP when filters change
+            const setFilter = (t) => {
+                activeFilter.value = t;
+                nextTick(() => {
+                    initScrollAnims();
+                    ScrollTrigger.refresh();
+                });
+            };
 
             onMounted(() => {
                 gsap.registerPlugin(ScrollTrigger);
@@ -279,7 +290,7 @@
                 } catch(e) { console.error(e); }
                 syncing.value = false;
                 initScrollAnims();
-                nextTick(() => lucide.createIcons());
+                nextTick(() => { lucide.createIcons(); ScrollTrigger.refresh(); });
             };
 
             const syncAll = async () => {
@@ -302,6 +313,23 @@
                 const newPlan = [];
                 for(let i=0; i<7; i++) newPlan.push(possible[Math.floor(Math.random() * possible.length)]);
                 plans.value[cat] = newPlan;
+                localStorage.setItem('raw_plans_cache', JSON.stringify(plans.value));
+                await syncAll();
+            };
+
+            // NEW: Swap a single slot manually by clicking it
+            const swapSlot = async (cat, idx) => {
+                const possible = recipes.value.filter(r => r.tags && r.tags.includes(cat));
+                if (possible.length < 1) return;
+                const currentId = plans.value[cat][idx]?.id;
+                // Find a different one if more than one exists
+                let next = possible[Math.floor(Math.random() * possible.length)];
+                if (possible.length > 1) {
+                    while(next.id === currentId) {
+                        next = possible[Math.floor(Math.random() * possible.length)];
+                    }
+                }
+                plans.value[cat][idx] = next;
                 localStorage.setItem('raw_plans_cache', JSON.stringify(plans.value));
                 await syncAll();
             };
@@ -330,23 +358,23 @@
                     }
                     localStorage.setItem('raw_recipes_cache', JSON.stringify(recipes.value));
                     await syncAll();
-                    modalOpen.value = false; viewOpen.value = false; initScrollAnims();
+                    modalOpen.value = false; viewOpen.value = false; 
+                    nextTick(() => { initScrollAnims(); ScrollTrigger.refresh(); });
                 } catch(e) { alert("Drive Error"); }
                 finally { uploadLoading.value = false; }
             };
 
             const initScrollAnims = () => {
-                nextTick(() => {
-                    gsap.utils.toArray(".recipe-card-wrapper").forEach((card) => {
-                        gsap.to(card, { scrollTrigger: { trigger: card, start: "top 95%" }, opacity: 1, y: 0, duration: 0.6 });
-                    });
+                gsap.utils.toArray(".recipe-card-wrapper").forEach((card) => {
+                    gsap.set(card, { opacity: 0, y: 30 });
+                    gsap.to(card, { scrollTrigger: { trigger: card, start: "top 95%" }, opacity: 1, y: 0, duration: 0.6, overwrite: 'auto' });
                 });
             };
 
             const editTotal = computed(() => form.value.ingredients.reduce((s, i) => s + (Number(i.price) || 0), 0));
 
             return {
-                recipes, plans, isLoggedIn, syncing, modalOpen, viewOpen, weeklyOpen, isEditing, form, days, weekPlan, previewImage, uploadLoading, editTotal, currentRecipe, vibrate, initDrive, activeFilter, filteredRecipes, activeWeeklyTab,
+                recipes, plans, isLoggedIn, syncing, modalOpen, viewOpen, weeklyOpen, isEditing, form, days, previewImage, uploadLoading, editTotal, currentRecipe, vibrate, initDrive, activeFilter, filteredRecipes, activeWeeklyTab, setFilter, swapSlot,
                 handleAuth: () => tokenClient.requestAccessToken(),
                 toggleTag, shufflePlan,
                 openAdd: () => { isEditing.value=false; form.value={id:'', name:'', imageUrl:'', ingredients:[{name:'', price:''}], instructions:'', tags: []}; previewImage.value=null; modalOpen.value=true; nextTick(()=>lucide.createIcons()); },
@@ -355,7 +383,7 @@
                 handleFile: (e) => { selectedFile.value = e.target.files[0]; if(selectedFile.value) previewImage.value = URL.createObjectURL(selectedFile.value); },
                 openWeekly: () => { weeklyOpen.value=true; nextTick(()=>lucide.createIcons()); },
                 save,
-                deleteRecipe: async () => { if(confirm("Löschen?")) { recipes.value = recipes.value.filter(r => r.id !== form.value.id); localStorage.setItem('raw_recipes_cache', JSON.stringify(recipes.value)); await syncAll(); modalOpen.value = false; viewOpen.value = false; } }
+                deleteRecipe: async () => { if(confirm("Löschen?")) { recipes.value = recipes.value.filter(r => r.id !== form.value.id); localStorage.setItem('raw_recipes_cache', JSON.stringify(recipes.value)); await syncAll(); modalOpen.value = false; viewOpen.value = false; nextTick(() => ScrollTrigger.refresh()); } }
             }
         }
     }).mount('#app');
